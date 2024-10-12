@@ -140,7 +140,7 @@ export default function DocumentList() {
               </>
             ) : (
               // Updated document list
-              Object.entries(groupDocumentsByDate(documents)).map(
+              Object.entries(groupDocumentsByDate(documents as Document[])).map(
                 ([group, docs]) =>
                   docs.length > 0 && (
                     <div key={group}>

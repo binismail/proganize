@@ -42,7 +42,7 @@ export default function BillingAndProfilePage() {
                 <AvatarFallback>
                   {user?.user_metadata.full_name
                     ?.split(" ")
-                    .map((n) => n[0])
+                    .map((n: any) => n[0])
                     .join("")}
                 </AvatarFallback>
               </Avatar>

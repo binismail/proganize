@@ -32,8 +32,9 @@ import { Spinner } from "@/components/shared/spinner";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Dialog, DialogDescription, DialogTitle } from "@radix-ui/react-dialog";
+import { Suspense } from "react";
 
-export default function BillingPage() {
+function BillingPageContent() {
   const { state, dispatch } = useAppContext();
   const { subscription, paymentMethods, invoices, user } = state;
   const router = useRouter();
@@ -353,7 +354,7 @@ export default function BillingPage() {
               onClose={() => setIsSubscribeModalOpen(false)}
               onSubscribe={handleConfirmSubscription}
               plan={premiumPlan}
-              isAnnual={isAnnual}
+              initialIsAnnual={isAnnual}
               annualDiscount={annualDiscount}
             />
             {isProcessing && <div>Processing your subscription...</div>}
@@ -361,5 +362,13 @@ export default function BillingPage() {
         )}
       </div>
     </>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<Spinner size='lg' className='mx-auto' />}>
+      <BillingPageContent />
+    </Suspense>
   );
 }

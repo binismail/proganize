@@ -100,8 +100,10 @@ export default function Template() {
 
   const handleTemplateChange = (templateId: string) => {
     const template = templates.find((t) => t.id === templateId);
-    setSelectedTemplate(template);
-    setCustomPrompt(template.prompt);
+    if (template) {
+      setSelectedTemplate(template);
+      setCustomPrompt(template.prompt);
+    }
   };
 
   const handlePromptChange = (

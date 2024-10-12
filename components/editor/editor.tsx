@@ -348,7 +348,7 @@ export default function EnhancedEditor() {
                 node.style.fontWeight === "bold" || node.tagName === "STRONG";
               let isItalic =
                 node.style.fontStyle === "italic" || node.tagName === "EM";
-              runs.push(new TextRun({ text, bold: isBold, italic: isItalic }));
+              runs.push(new TextRun({ text, bold: isBold, italics: isItalic }));
               return new Paragraph({ children: runs });
             }
             return new Paragraph({ children: [] });
