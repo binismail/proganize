@@ -30,18 +30,20 @@ export default function DocumentGenerator({
   const [nextResetTime, setNextResetTime] = useState<Date | null>(null);
 
   const handleGenerateDocument = async () => {
+    dispatch({ type: "SET_IS_GENERATING", payload: true });
+
     if (subscriptionStatus !== "active") {
       const { canProceed, resetTime } = await checkAndUpdateConversationCount(
         user.id
       );
       if (!canProceed) {
         setDailyLimitReached(true);
+        dispatch({ type: "SET_IS_GENERATING", payload: false });
         setNextResetTime(resetTime);
         return;
       }
     }
 
-    dispatch({ type: "SET_IS_GENERATING", payload: true });
     dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
     dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
 
