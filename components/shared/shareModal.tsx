@@ -43,6 +43,7 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
   const [isPublic, setIsPublic] = useState(false);
   const [publicLink, setPublicLink] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [documentName, setDocumentName] = useState(""); // Add state for document name
 
   const isActiveSubscription = subscriptionStatus === "active";
 
@@ -50,6 +51,7 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
     if (isOpen) {
       fetchPendingInvitations();
       fetchDocumentStatus();
+      fetchDocumentDetails(); // Fetch document details
     }
   }, [isOpen, documentId]);
 
@@ -83,6 +85,21 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
       } else {
         setPublicLink("");
       }
+    }
+  };
+
+  const fetchDocumentDetails = async () => {
+    // Create a new function to fetch document details
+    const { data, error } = await supabase
+      .from("documents")
+      .select("title") // Assuming the column for the document name is 'name'
+      .eq("id", documentId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching document details:", error);
+    } else {
+      setDocumentName(data?.title || ""); // Set the document name
     }
   };
 
@@ -170,7 +187,7 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
         body: JSON.stringify({
           email: email,
           inviterName: user.user_metadata.full_name,
-          documentName: "Your Document", // Replace with actual document name
+          documentName: documentName, // Replace with actual document name
           inviteLink: inviteLink,
           role: role, // Include the role in the email
         }),
@@ -291,14 +308,14 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
   };
 
   const togglePublicAccess = async () => {
-    if (!isActiveSubscription) {
-      toast({
-        title: "Feature not available",
-        description: "Upgrade to share documents publicly",
-        variant: "destructive",
-      });
-      return;
-    }
+    // if (!isActiveSubscription) {
+    //   toast({
+    //     title: "Feature not available",
+    //     description: "Upgrade to share documents publicly",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
 
     setIsUpdating(true);
     const newPublicStatus = !isPublic;
@@ -440,7 +457,7 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
                 <Switch
                   checked={isPublic}
                   onCheckedChange={togglePublicAccess}
-                  disabled={isUpdating || !isActiveSubscription}
+                  disabled={isUpdating}
                 />
               </div>
               {isPublic && (
@@ -454,11 +471,11 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
                 </>
               )}
               {isUpdating && <Spinner />}
-              {!isActiveSubscription && (
+              {/* {!isActiveSubscription && (
                 <p className='text-sm text-blue-500 text-center'>
                   Upgrade to share documents publicly.
                 </p>
-              )}
+              )} */}
             </div>
           </TabsContent>
         </Tabs>

@@ -52,49 +52,51 @@ export default function Nav() {
   };
 
   return (
-    <header className='flex h-16 items-center justify-between px-4 md:px-6 bg-background border-b'>
-      <Link href='/' className='flex items-center space-x-2'>
-        <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
-      </Link>
-      <nav className='hidden md:flex gap-6'>
-        {user ? (
-          <>
-            <Link
-              className='text-sm font-medium hover:underline underline-offset-4'
-              href='/account-setting'
-            >
-              Account Settings
-            </Link>
-            <Link
-              className='text-sm font-medium hover:underline underline-offset-4'
-              href='/billing'
-            >
-              Billing
-            </Link>
-            <Link
-              className='text-sm font-medium hover:underline underline-offset-4'
-              href='/templates'
-            >
-              Templates
-            </Link>
-          </>
-        ) : (
-          <>
-            <Link
-              className='text-sm font-medium hover:underline underline-offset-4'
-              href='/pricing'
-            >
-              Pricing
-            </Link>
-            <Link
-              className='text-sm font-medium hover:underline underline-offset-4'
-              href='/templates'
-            >
-              Templates
-            </Link>
-          </>
-        )}
-      </nav>
+    <header className='flex h-16 items-center justify-between px-4 md:px-6 bg-background border-b fixed w-full z-50'>
+      <div className='flex items-center gap-16'>
+        <Link href='/' className='flex items-center space-x-2'>
+          <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
+        </Link>
+        <nav className='hidden md:flex gap-6'>
+          {user ? (
+            <>
+              <Link
+                className='text-sm font-medium hover:underline underline-offset-4'
+                href='/account-setting'
+              >
+                Account Settings
+              </Link>
+              <Link
+                className='text-sm font-medium hover:underline underline-offset-4'
+                href='/billing'
+              >
+                Billing
+              </Link>
+              <Link
+                className='text-sm font-medium hover:underline underline-offset-4'
+                href='/templates'
+              >
+                Templates
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                className='text-sm font-medium hover:underline underline-offset-4'
+                href='/pricing'
+              >
+                Pricing
+              </Link>
+              <Link
+                className='text-sm font-medium hover:underline underline-offset-4'
+                href='/templates'
+              >
+                Templates
+              </Link>
+            </>
+          )}
+        </nav>
+      </div>
       <div className='flex items-center gap-4'>
         <Button
           onClick={handleGoogleAuth}

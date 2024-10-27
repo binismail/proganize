@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Download, AlertTriangle } from "lucide-react";
+import { CreditCard, Download, AlertTriangle, ChevronLeft } from "lucide-react";
 import { Check } from "lucide-react"; // Make sure to import the Check icon
 import { Switch } from "@/components/ui/switch";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
@@ -33,6 +33,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Dialog, DialogDescription, DialogTitle } from "@radix-ui/react-dialog";
 import { Suspense } from "react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
@@ -205,9 +211,23 @@ function BillingPageContent() {
           </DialogContent>
         </Dialog>
       )}
-      <Nav />
+      {/* <Nav /> */}
       <div className='container mx-auto px-4 py-8'>
-        <h1 className='text-3xl font-bold mb-8'>Billing</h1>
+        <div className='flex items-center gap-4 mb-8'>
+          <div className='cursor-pointer' onClick={() => router.push("/")}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <ChevronLeft className='mt-2' />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Return Home</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <h1 className='text-3xl font-bold'>Billing</h1>
+        </div>
         {isLoading ? (
           <Spinner size='lg' className='mx-auto' />
         ) : error ? (

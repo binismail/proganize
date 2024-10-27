@@ -1,0 +1,9 @@
+.chat-container {
+  transition: all 0.3s ease; /* Smooth transition for all properties */
+  opacity: 1; /* Fully visible */
+}
+
+.chat-container.collapsed {
+  opacity: 0; /* Fade out when collapsed */
+  transform: translateY(-10px); /* Slight upward movement */
+}

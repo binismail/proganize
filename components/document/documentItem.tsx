@@ -20,7 +20,7 @@ export default function DocumentItem({ document }: { document: Document }) {
   const { documents, selectedDocument, isRenaming, newTitle } = state;
 
   const handleDocumentClick = (document: any) => {
-    console.log(document);
+    // console.log(document.content);
     dispatch({ type: "SET_SELECTED_DOCUMENT", payload: document });
     dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
     dispatch({
@@ -31,18 +31,12 @@ export default function DocumentItem({ document }: { document: Document }) {
       type: "SET_HAS_GENERATION_STARTED",
       payload: true,
     });
-    if (document.content === "<p></p>") {
-      console.log("hi", document.content);
-      dispatch({
-        type: "SET_GENERATED_DOCUMENT",
-        payload: document.content,
-      });
-      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
-    } else {
-      console.log("hello");
-      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
-    }
 
+    dispatch({
+      type: "SET_GENERATED_DOCUMENT",
+      payload: document.content,
+    });
+    dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
     dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: document.id });
     dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
   };

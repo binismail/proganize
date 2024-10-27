@@ -1,15 +1,18 @@
 "use client"; // Add this line at the top of the file
 
-// context/AppContext.tsx
-import { createContext, useContext, useReducer, ReactNode } from "react";
-import { useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useReducer,
+  ReactNode,
+  useEffect,
+} from "react";
 
 interface Document {
   id: string;
   title: string;
   updated_at?: string;
   created_at: string;
-  // Add other properties as needed
 }
 
 interface ConversationItem {
@@ -34,10 +37,12 @@ interface State {
   currentDocumentId: string | null;
   documentUpdated: boolean;
   subscription: any;
-  paymentMethods: any;
-  invoices: any;
+  paymentMethods: any[];
+  invoices: any[];
   subscriptionStatus: string;
   savedState: any;
+  saveStatus: boolean;
+  openDocument: boolean;
 }
 
 const initialState: State = {
@@ -61,6 +66,8 @@ const initialState: State = {
   invoices: [],
   subscriptionStatus: "inactive",
   savedState: null,
+  saveStatus: true,
+  openDocument: false,
 };
 
 // Define actions
@@ -78,13 +85,15 @@ type Action =
   | { type: "SET_SHOW_INITIAL_CONTENT"; payload: boolean }
   | { type: "SET_HAS_GENERATION_STARTED"; payload: boolean }
   | { type: "SET_IS_LOADING"; payload: boolean }
-  | { type: "SET_CURRENT_DOCUMENT_ID"; payload: string }
+  | { type: "SET_CURRENT_DOCUMENT_ID"; payload: string | null }
   | { type: "SET_DOCUMENT_UPDATED"; payload: boolean }
   | { type: "SET_SUBSCRIPTION"; payload: any }
-  | { type: "SET_PAYMENT_METHODS"; payload: any }
-  | { type: "SET_INVOICES"; payload: any }
+  | { type: "SET_PAYMENT_METHODS"; payload: any[] }
+  | { type: "SET_INVOICES"; payload: any[] }
   | { type: "SET_SUBSCRIPTION_STATUS"; payload: string }
-  | { type: "INITIALIZE_STATE"; payload: Partial<State> };
+  | { type: "INITIALIZE_STATE"; payload: Partial<State> }
+  | { type: "SET_SAVING_STATUS"; payload: boolean }
+  | { type: "SET_OPEN_DOCUMENT"; payload: boolean };
 
 const AppReducer = (state: State, action: Action): State => {
   switch (action.type) {
@@ -127,9 +136,11 @@ const AppReducer = (state: State, action: Action): State => {
     case "SET_SUBSCRIPTION_STATUS":
       return { ...state, subscriptionStatus: action.payload };
     case "INITIALIZE_STATE":
-      return { ...state, savedState: action.payload };
-    case "SET_SUBSCRIPTION_STATUS":
-      return { ...state, subscriptionStatus: action.payload };
+      return { ...state, ...action.payload }; // Initialize from saved state
+    case "SET_SAVING_STATUS":
+      return { ...state, saveStatus: action.payload };
+    case "SET_OPEN_DOCUMENT":
+      return { ...state, openDocument: action.payload };
     default:
       return state;
   }
@@ -147,7 +158,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [state, dispatch] = useReducer(AppReducer, initialState);
 
-  // Add this effect to initialize state from localStorage
   useEffect(() => {
     const savedState = localStorage.getItem("appState");
     if (savedState) {
@@ -155,7 +165,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Add this effect to save state to localStorage when it changes
   useEffect(() => {
     localStorage.setItem("appState", JSON.stringify(state));
   }, [state]);

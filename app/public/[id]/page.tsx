@@ -4,14 +4,14 @@ import { notFound } from "next/navigation";
 import DOMPurify from "isomorphic-dompurify";
 import { Database } from "@/database.types";
 import { Metadata } from "next";
+import { Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function PublicDocument({
-  params,
-}: {
-  params: { id: string };
+export default async function PublicDocument(props: {
+  params: Promise<{ id: string }>;
 }) {
+  const params = await props.params;
   const supabase = createServerComponentClient<Database>({ cookies });
 
   // Fetch the document
@@ -42,19 +42,20 @@ export default async function PublicDocument({
   return (
     <div className='bg-gray-100 min-h-screen'>
       <div className='max-w-5xl mx-auto px-4 py-12'>
-        <article className='bg-white shadow-lg rounded-lg overflow-hidden'>
+        <article className='bg-white overflow-hidden'>
           <div className='px-6 py-8'>
             <h1 className='text-4xl font-bold mb-4 text-gray-900'>
               {document.title}
             </h1>
-            <div className='mb-6'>
-              <span className='text-sm text-gray-500'>
+            <div className='mb-6 flex items-center gap-2'>
+              <Calendar size={14} />
+              <span className='text-sm text-gray-500 inline-block'>
                 Published on{" "}
                 {new Date(document.created_at).toLocaleDateString()}
               </span>
             </div>
             <div
-              className='prose prose-lg max-w-none text-gray-700'
+              className='document-content prose prose-lg max-w-none text-gray-700'
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>
@@ -64,11 +65,10 @@ export default async function PublicDocument({
   );
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string };
+export async function generateMetadata(props: {
+  params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const params = await props.params;
   const supabase = createServerComponentClient<Database>({ cookies });
   const { data: document } = await supabase
     .from("documents")

@@ -1,13 +1,19 @@
+"use client";
 import { useAppContext } from "@/app/context/appContext";
 import DocumentItem from "./documentItem";
 import {
   ArrowUpIcon,
+  ChevronsUpDown,
+  Link,
   PanelLeft,
   PanelRight,
   PlusIcon,
   Sparkle,
   Sparkles,
 } from "lucide-react";
+import logoBlack from "@/asset/proganize-dark-side.svg";
+import logoWhite from "@/asset/proganize-light-side.svg";
+import Image from "next/image";
 import { parseISO, isToday, isYesterday, isThisWeek } from "date-fns";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
@@ -22,13 +28,19 @@ import {
 } from "../ui/tooltip";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
 import { useRouter } from "next/navigation";
+import { Avatar } from "@radix-ui/react-avatar";
+import { AvatarImage } from "@radix-ui/react-avatar";
+import { AvatarFallback } from "@radix-ui/react-avatar";
+import { UserProfilePopup } from "../shared/userProfile";
+import { useTheme } from "next-themes";
 
 export default function DocumentList() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false); // State for popover visibility
   const router = useRouter();
   const { state, dispatch } = useAppContext();
-  const { documents, user, isLoading } = state;
+  const { documents, user, isLoading, subscriptionStatus } = state;
 
   interface Document {
     id: string;
@@ -48,6 +60,7 @@ export default function DocumentList() {
   }
 
   const startNewDocument = () => {
+    dispatch({ type: "SET_OPEN_DOCUMENT", payload: true });
     dispatch({ type: "SET_SELECTED_DOCUMENT", payload: null });
     dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
     dispatch({
@@ -83,6 +96,7 @@ export default function DocumentList() {
 
     return grouped;
   };
+  const { theme, setTheme } = useTheme();
 
   const premiumPlan = {
     name: "Pro",
@@ -103,9 +117,14 @@ export default function DocumentList() {
 
   return (
     <div
-      className={`transition-all duration-300 h-[92vh] ease-in-out flex flex-col justify-between ${isCollapsed ? "w-12" : "w-1/6"} border-r`}
+      className={`transition-all duration-300 h-screen ease-in-out flex flex-col justify-between ${isCollapsed ? "w-12" : "w-1/6"} border-r`}
     >
       <div>
+        <div className='px-3 py-2'>
+          {!isCollapsed && (
+            <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
+          )}
+        </div>
         <div className='flex justify-between items-center p-2'>
           {!isCollapsed && <h2 className='text-l font-semibold'>Documents</h2>}
           <div className='flex items-center'>
@@ -181,31 +200,67 @@ export default function DocumentList() {
           </>
         )}
       </div>
-      {!isCollapsed && (
-        <div className='mt-4 px-2'>
+      {!user?.id && !isCollapsed && (
+        <div className='px-2 mb-4'>
           <Button
             variant='outline'
             className='w-full'
             onClick={() => {
-              if (!user?.id) {
-                signIn();
-              } else {
-                setIsSubscribeModalOpen(true);
-              }
+              signIn();
             }}
           >
-            {!user?.id ? "Sign in to access Pro features" : "Upgrade to Pro"}
+            {"Sign in to access Pro features"}
             <Sparkles size={15} className='ml-2' />
           </Button>
           {isSubscribeModalOpen && (
             <SubscribeModal
               isOpen={isSubscribeModalOpen}
-              onClose={() => setIsSubscribeModalOpen(false)}
+              onClose={() => {
+                console.log("Closing subscribe modal"); // Debug log
+                setIsSubscribeModalOpen(false);
+              }}
               onSubscribe={() => router.push("/subscribe")}
               plan={premiumPlan}
               initialIsAnnual={false}
               annualDiscount={annualDiscount}
             />
+          )}
+        </div>
+      )}
+      {user?.id && (
+        <div
+          className={` mb-4 border flex gap-4 ${!isCollapsed && "p-2 mx-4"} mx-1 cursor-pointer rounded-lg`}
+          onClick={() => {
+            setIsPopoverOpen(!isPopoverOpen);
+          }}
+        >
+          <Avatar className='border-2 border-background inline-block'>
+            <AvatarImage
+              className={`${!isCollapsed && "w-10"}  rounded-lg`}
+              src={user?.user_metadata.avatar_url}
+              alt={user?.name}
+            />
+            <AvatarFallback>{user?.user_metadata.full_name[0]}</AvatarFallback>
+          </Avatar>
+          {!isCollapsed && (
+            <div className='flex items-center gap-2'>
+              <p className='text-sm'>{user?.user_metadata.email}</p>
+              <ChevronsUpDown size={15} />
+            </div>
+          )}
+          {isPopoverOpen && ( // Render the popover conditionally
+            <div className='absolute top-[50%] z-10 bg-background shadow-lg rounded-lg p-4'>
+              <UserProfilePopup
+                user={user}
+                onUpgrade={() => {
+                  setIsPopoverOpen(false);
+                  setIsSubscribeModalOpen(true);
+                }}
+                onSignOut={() => {}}
+                subscriptionStatus={subscriptionStatus}
+              />{" "}
+              {/* Pass user data to UserProfile */}
+            </div>
           )}
         </div>
       )}

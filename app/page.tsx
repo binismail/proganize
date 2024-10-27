@@ -16,6 +16,14 @@ import Conversation from "@/components/shared/conversation";
 import DocumentGenerator from "@/components/shared/documentGenerator";
 import { supabase } from "@/utils/supabase/instance";
 import { checkSubscriptionStatus } from "@/utils/supabaseOperations";
+import { Dialog, DialogContent } from "@radix-ui/react-dialog";
+import { Pencil, Eye, Feather, Gift, PlusIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import NewDocument from "@/components/shared/newDocument";
+import { SubscribeModal } from "@/components/shared/subscribeModal";
+import { useRouter } from "next/navigation";
+import LightRichTextEditor from "@/components/editor/lightRichTextEditor";
+import RichTextEditor from "@/components/editor/customEditor";
 // You'll need to create this utility function
 
 export default function Home() {
@@ -26,7 +34,7 @@ export default function Home() {
     isGenerating,
     isEditorVisible,
     showInitialContent,
-    subscriptionStatus, // Add this to your app context
+    openDocument, // Add this to your app context
   } = state;
 
   // Add a new state variable to track if generation has ever started
@@ -130,41 +138,90 @@ export default function Home() {
     }
   };
 
+  const router = useRouter();
+
+  const templates = [
+    { icon: Pencil, title: "Define your tech stack and specs with ease." },
+    { icon: Feather, title: "Capture user needs in actionable stories." },
+    { icon: Gift, title: "Write SEO-optimized posts that drive traffic." },
+    { icon: Eye, title: "Generate clear, professional README." },
+  ];
+
   return (
-    <div className='flex flex-col'>
-      <Nav />
-      <main className='flex-grow flex'>
-        <div className='flex w-full'>
-          {/* Conversation sidebar */}
-          <DocumentList />
+    <main className='flex-grow flex'>
+      {/* <Nav /> */}
+      <div className='flex w-full'>
+        {/* Conversation sidebar */}
+        <DocumentList />
 
-          {/* Main content area */}
-          <div className='w-full flex'>
-            {/* Input area */}
-            <div
-              className={`flex flex-col ${isEditorVisible ? "mx-5" : "mx-auto"} ${isEditorVisible && "w-full"} min-w-[500px] max-w-[500px]`}
+        {showInitialContent && (
+          <div className='flex items-center justify-center w-full flex-col'>
+            <h1 className='text-3xl font-bold my-4'>
+              Start your documentation
+            </h1>
+            <p className='mx-auto w-[500px] text-center mb-6 text-sm'>
+              Easily get your ideas to a well detailed document, and organize
+              your product development process in minutes.
+            </p>
+            <Button
+              className='rounded-full'
+              onClick={() =>
+                dispatch({ type: "SET_OPEN_DOCUMENT", payload: true })
+              }
             >
-              {hasGenerationStarted ? <Conversation /> : null}
-              {showInitialContent ? (
-                <div className='mb-10 my-auto'>
-                  <h1 className='text-3xl font-bold text-center'>
-                    What would you like to build?
-                  </h1>
-                  <p className='text-center text-gray-60 text-sm mt-2 mx-auto'>
-                    I can help you easily get your ideas to a well detailed
-                    document, and organize your product development process in
-                    minutes. <b>Try me</b>
-                  </p>
-                </div>
-              ) : null}
+              New Document
+              <PlusIcon size={15} className='ml-2' />
+            </Button>
 
-              <DocumentGenerator subscriptionStatus={subscriptionStatus} />
+            <div className='flex gap-6 mt-10'>
+              {templates.map((template, index) => (
+                <Card
+                  key={index}
+                  className='hover:shadow-lg transition-shadow duration-300 rounded-2xl w-[200px] py-2 cursor-pointer'
+                >
+                  <CardContent className='flex flex-col items-center justify-center p-6'>
+                    <template.icon className='mb-4 text-primary' />
+                    <p className='text-center text-sm'>{template.title}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            {/* Document editor */}
-            {isEditorVisible && <Editor />}
           </div>
-        </div>
-      </main>
-    </div>
+        )}
+
+        {isEditorVisible && <Editor />}
+      </div>
+
+      {/* <SubscribeModal
+        isOpen={true}
+        onClose={() => false}
+        onSubscribe={() => router.push("/subscribe")}
+        plan={{
+          name: "Pro",
+          monthlyPrice: 20, // Adjust this to your actual price
+          features: [
+            "Share documents publicly with a direct link",
+            "Unlimited collaborators",
+            "Unlimited conversations with your documents",
+            "Download documents in PDF and DOCX formats",
+            "Generate add-ons (user stories, technical requirements, product roadmaps)",
+            "Upload documents for AI-powered enhancement",
+            "Priority support",
+            "Early access to new features",
+          ],
+        }}
+        initialIsAnnual={false}
+        annualDiscount={20}
+      /> */}
+
+      {openDocument && (
+        <NewDocument
+          openDocument={openDocument}
+          onClose={() =>
+            dispatch({ type: "SET_OPEN_DOCUMENT", payload: false })
+          }
+        />
+      )}
+    </main>
   );
 }

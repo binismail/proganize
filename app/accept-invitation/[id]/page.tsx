@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/utils/supabase/instance";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Spinner } from "@/components/shared/spinner";
 
 export default function AcceptInvitation() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function AcceptInvitation() {
   const [invitation, setInvitation] = useState(null) as any;
   const [user, setUser] = useState(null) as any;
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false); // Add loading state
 
   useEffect(() => {
     if (id) {
@@ -65,12 +67,14 @@ export default function AcceptInvitation() {
   };
 
   const acceptInvitation = async () => {
+    setLoading(true); // Set loading to true when starting the process
     if (!user) {
       toast({
         title: "Authentication required",
         description: "Please sign in to accept the invitation",
         variant: "default",
       });
+      setLoading(false); // Reset loading state
       return;
     }
 
@@ -157,29 +161,44 @@ export default function AcceptInvitation() {
         description: "Please try again later",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false); // Reset loading state after process completes
     }
   };
 
-  if (!invitation) return <div>Loading...</div>;
-
   return (
-    <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100'>
-      <div className='p-8 bg-white rounded-lg shadow-md'>
-        <h1 className='text-2xl font-bold mb-4'>Accept Invitation</h1>
-        <p className='mb-4'>
-          You've been invited to collaborate on a document.
-        </p>
-        {user ? (
-          <Button onClick={acceptInvitation}>Accept Invitation</Button>
-        ) : (
-          <div>
-            <p className='mb-4'>
-              Please sign in with Google to accept the invitation:
-            </p>
-            <Button onClick={signInWithGoogle}>Sign in with Google</Button>
-          </div>
-        )}
-      </div>
+    <div className='flex flex-col items-center justify-center min-h-screen bg-gray-300'>
+      {invitation ? (
+        <div className='p-8 bg-white rounded-lg shadow-md w-[500px]'>
+          <h1 className='text-2xl font-bold mb-4'>Pending Invitation</h1>
+          <p className='mb-4'>
+            <b>Khalid Ismail</b> has invited you to collaborate on
+            <b>{" Proganize Document"}</b> together.
+          </p>
+          {user ? (
+            <div className='w-full flex gap-6 mx-auto'>
+              <Button onClick={acceptInvitation} disabled={loading}>
+                {loading ? <Spinner size='sm' /> : "Accept Invitation"}{" "}
+                {/* Show loader */}
+              </Button>
+              <Button variant='outline' onClick={() => {}}>
+                Decline
+              </Button>
+            </div>
+          ) : (
+            <div>
+              <p className='mb-4'>
+                We noticed you're not logged in, login to with google to accept
+                invitation, if you don't have an account no worries we will
+                create an account for you
+              </p>
+              <Button onClick={signInWithGoogle}>Sign in with Google</Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <Spinner size='lg' />
+      )}
     </div>
   );
 }
