@@ -5,6 +5,7 @@ import DOMPurify from "isomorphic-dompurify";
 import { Database } from "@/database.types";
 import { Metadata } from "next";
 import { Calendar } from "lucide-react";
+import { marked } from "marked";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,9 @@ export default async function PublicDocument(props: {
     );
   }
 
-  // Sanitize the HTML content
-  const sanitizedContent = DOMPurify.sanitize(document?.content || "");
+  // Convert markdown to HTML and then sanitize
+  const htmlContent = marked.parse(document?.content || "");
+  const sanitizedContent = DOMPurify.sanitize(htmlContent);
 
   return (
     <div className='bg-gray-100 min-h-screen'>
@@ -55,7 +57,7 @@ export default async function PublicDocument(props: {
               </span>
             </div>
             <div
-              className='document-content prose prose-lg max-w-none text-gray-700'
+              className='document-content prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900'
               dangerouslySetInnerHTML={{ __html: sanitizedContent }}
             />
           </div>

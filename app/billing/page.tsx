@@ -20,7 +20,14 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Download, AlertTriangle, ChevronLeft } from "lucide-react";
+import {
+  CreditCard,
+  Download,
+  AlertTriangle,
+  ChevronLeft,
+  Wallet,
+  AlertCircle,
+} from "lucide-react";
 import { Check } from "lucide-react"; // Make sure to import the Check icon
 import { Switch } from "@/components/ui/switch";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
@@ -30,7 +37,11 @@ import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { Spinner } from "@/components/shared/spinner";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DialogContent, DialogHeader } from "@/components/ui/dialog";
+import {
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+} from "@/components/ui/dialog";
 import { Dialog, DialogDescription, DialogTitle } from "@radix-ui/react-dialog";
 import { Suspense } from "react";
 import {
@@ -39,10 +50,15 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+
+import { checkWordCredits } from "@/lib/wordCredit";
+import { TopUpModal } from "@/components/shared/topUpModal";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
-  const { subscription, paymentMethods, invoices, user } = state;
+  const { subscription, paymentMethods, invoices, user, showTopup } = state;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +85,10 @@ function BillingPageContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [wordCredits, setWordCredits] = useState<number>(0);
+  const MAX_CREDITS = 10000; // Define maximum credits threshold
+  const LOW_CREDITS_THRESHOLD = 1000;
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -138,6 +158,10 @@ function BillingPageContent() {
         .order("created_at", { ascending: false });
       if (invoicesError) throw invoicesError;
       dispatch({ type: "SET_INVOICES", payload: invoicesData || [] });
+
+      // Get word credits using our existing function
+      const remainingCredits = await checkWordCredits(userId);
+      setWordCredits(remainingCredits);
     } catch (error: any) {
       console.error("Error fetching billing data:", error);
       setError(error.message);
@@ -160,7 +184,9 @@ function BillingPageContent() {
       });
 
       const data = await response.json();
+
       if (data) {
+        setPaymentData(data);
         setShowConfetti(true);
         setShowModal(true);
       }
@@ -172,10 +198,6 @@ function BillingPageContent() {
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString();
   };
 
   const formatAmount = (amount: number) => {
@@ -190,9 +212,15 @@ function BillingPageContent() {
   };
 
   const handleConfirmSubscription = () => {
-    // Implement your subscription logic here
-    console.log("Subscription confirmed");
     setIsSubscribeModalOpen(false);
+  };
+
+  const getProgressValue = () => (wordCredits / MAX_CREDITS) * 100;
+  const getProgressColor = () => {
+    const percentage = getProgressValue();
+    if (percentage <= 20) return "bg-red-500";
+    if (percentage <= 40) return "bg-yellow-500";
+    return "bg-green-500";
   };
 
   return (
@@ -200,14 +228,53 @@ function BillingPageContent() {
       {showConfetti && <Confetti recycle={false} numberOfPieces={200} />}
       {showModal && (
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent>
+          <DialogContent className='sm:max-w-md'>
             <DialogHeader>
-              <DialogTitle>Welcome to Pro!</DialogTitle>
-              <DialogDescription>
-                Start enjoying your pro features now. We're excited to have you
-                on board!
+              <DialogTitle className='flex items-center gap-2'>
+                {paymentData?.metadata?.creditAmount ? (
+                  <>
+                    <Wallet className='h-5 w-5 text-green-500' />
+                    Credits Added Successfully!
+                  </>
+                ) : (
+                  <>
+                    <Check className='h-5 w-5 text-green-500' />
+                    Welcome to Pro!
+                  </>
+                )}
+              </DialogTitle>
+              <DialogDescription className='pt-2 space-y-2'>
+                {paymentData?.metadata?.creditAmount ? (
+                  <>
+                    <p>
+                      <span className='font-medium text-green-600'>
+                        {parseInt(
+                          paymentData.metadata.creditAmount
+                        ).toLocaleString()}
+                      </span>{" "}
+                      word credits have been added to your account.
+                    </p>
+                    <p className='text-sm text-muted-foreground'>
+                      Your new balance will be reflected in your dashboard
+                      immediately.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>Your subscription has been activated successfully!</p>
+                    <p className='text-sm text-muted-foreground'>
+                      Start enjoying your pro features now. We're excited to
+                      have you on board!
+                    </p>
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
+            <DialogFooter className='mt-4'>
+              <Button onClick={() => setShowModal(false)} className='w-full'>
+                Got it, thanks!
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
@@ -234,77 +301,144 @@ function BillingPageContent() {
           <div>Error loading billing data: {error}</div>
         ) : (
           <div className='space-y-4'>
-            <Card>
-              <CardHeader>
-                <CardTitle>Subscription</CardTitle>
-                <CardDescription>
-                  Manage your subscription and billing cycle
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {subscription ? (
-                  <div className='space-y-2'>
-                    <div className='flex justify-between'>
-                      <span>Current Plan:</span>
-                      <span className='font-medium'>{subscription?.plan}</span>
+            <div className='flex w-full gap-8'>
+              <Card className='md:w-1/2'>
+                <CardHeader>
+                  <CardTitle>Subscription</CardTitle>
+                  <CardDescription>
+                    Manage your subscription and billing cycle
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {subscription ? (
+                    <div className='space-y-2'>
+                      <div className='flex justify-between'>
+                        <span>Current Plan:</span>
+                        <span className='font-medium'>
+                          {subscription?.plan}
+                        </span>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span>Status:</span>
+                        <Badge
+                          variant={
+                            subscription.status === "active"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {subscription.status.charAt(0).toUpperCase() +
+                            subscription.status.slice(1)}
+                        </Badge>
+                      </div>
+                      <div className='flex justify-between'>
+                        <span>Next Billing Date:</span>
+                        <span className='font-medium'>
+                          {new Date(
+                            subscription.current_period_end
+                          ).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {subscription.cancel_at_period_end && (
+                        <div className='flex items-center text-yellow-600'>
+                          <AlertTriangle className='mr-2 h-4 w-4' />
+                          Your subscription will cancel at the end of the
+                          current billing period.
+                        </div>
+                      )}
                     </div>
-                    <div className='flex justify-between'>
-                      <span>Status:</span>
-                      <Badge
-                        variant={
-                          subscription.status === "active"
-                            ? "default"
-                            : "destructive"
-                        }
-                      >
-                        {subscription.status.charAt(0).toUpperCase() +
-                          subscription.status.slice(1)}
-                      </Badge>
+                  ) : (
+                    <div className='text-center'>
+                      <h3 className='text-lg font-semibold mb-4'>
+                        You're not subscribed yet
+                      </h3>
+                      <p className='text-sm text-gray-500 mb-4'>
+                        Subscribe now to unlock premium features:
+                      </p>
                     </div>
-                    <div className='flex justify-between'>
-                      <span>Next Billing Date:</span>
-                      <span className='font-medium'>
-                        {new Date(
-                          subscription.current_period_end
-                        ).toLocaleDateString()}
-                      </span>
+                  )}
+                </CardContent>
+                <CardFooter className='flex justify-between'>
+                  {!subscription ? (
+                    <Button onClick={handleSubscribe} className='w-full'>
+                      Subscribe Now
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant='outline'>Change Plan</Button>
+                      {subscription.cancel_at_period_end ? (
+                        <Button variant='default'>Resume Subscription</Button>
+                      ) : (
+                        <Button variant='destructive'>
+                          Cancel Subscription
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </CardFooter>
+              </Card>
+
+              <Card className='md:w-1/2'>
+                <CardHeader>
+                  <div className='flex items-center gap-2'>
+                    <Wallet className='h-5 w-5' />
+                    <CardTitle>Word Credits Balance</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Monitor your word credits and top up when needed
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className='space-y-4'>
+                    <div className='flex justify-between items-center'>
+                      <span>Available Credits:</span>
+                      <div className='flex items-center gap-2'>
+                        <span className='text-2xl font-bold'>
+                          {wordCredits.toLocaleString()}
+                        </span>
+                        <span className='text-sm text-gray-500'>words</span>
+                      </div>
                     </div>
-                    {subscription.cancel_at_period_end && (
-                      <div className='flex items-center text-yellow-600'>
-                        <AlertTriangle className='mr-2 h-4 w-4' />
-                        Your subscription will cancel at the end of the current
-                        billing period.
+
+                    <div className='space-y-2'>
+                      <Progress
+                        value={getProgressValue()}
+                        className={`h-2 ${getProgressColor()}`}
+                      />
+                      <div className='flex justify-between text-sm text-gray-500'>
+                        <span>Max words</span>
+                        <span>{MAX_CREDITS.toLocaleString()} words</span>
+                      </div>
+                    </div>
+
+                    {wordCredits < LOW_CREDITS_THRESHOLD && (
+                      <div className='flex items-center gap-2 text-yellow-600 bg-yellow-50 p-3 rounded-md'>
+                        <AlertCircle className='h-4 w-4' />
+                        <span className='text-sm'>
+                          Your word credits are running low. Consider topping up
+                          to ensure uninterrupted service.
+                        </span>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className='text-center'>
-                    <h3 className='text-lg font-semibold mb-4'>
-                      You're not subscribed yet
-                    </h3>
-                    <p className='text-sm text-gray-500 mb-4'>
-                      Subscribe now to unlock premium features:
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className='flex justify-between'>
-                {!subscription ? (
-                  <Button onClick={handleSubscribe} className='w-full'>
-                    Subscribe Now
+                </CardContent>
+                <CardFooter className='flex justify-end gap-4'>
+                  <Button
+                    onClick={() =>
+                      dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: true })
+                    }
+                    className='w-full'
+                    variant={
+                      wordCredits < LOW_CREDITS_THRESHOLD
+                        ? "default"
+                        : "outline"
+                    }
+                  >
+                    Top Up Credits
                   </Button>
-                ) : (
-                  <>
-                    <Button variant='outline'>Change Plan</Button>
-                    {subscription.cancel_at_period_end ? (
-                      <Button variant='default'>Resume Subscription</Button>
-                    ) : (
-                      <Button variant='destructive'>Cancel Subscription</Button>
-                    )}
-                  </>
-                )}
-              </CardFooter>
-            </Card>
+                </CardFooter>
+              </Card>
+            </div>
 
             <Card>
               <CardHeader>
@@ -381,6 +515,14 @@ function BillingPageContent() {
           </div>
         )}
       </div>
+
+      <TopUpModal
+        isOpen={showTopup}
+        onClose={() =>
+          dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: false })
+        }
+        userId={user.id}
+      />
     </>
   );
 }

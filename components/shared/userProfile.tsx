@@ -13,23 +13,24 @@ import {
 import { CreditCard, LogOut, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
+import { useAppContext } from "@/app/context/appContext";
+import { signOut } from "@/utils/supabaseOperations";
+import { toast } from "@/hooks/use-toast";
 
 interface UserProfilePopupProps {
   user: {
     user_metadata: any;
   };
-  onUpgrade: () => void;
   onSignOut: () => void;
   subscriptionStatus: string;
 }
 
 export function UserProfilePopup({
   user,
-  onUpgrade,
-  onSignOut,
   subscriptionStatus,
 }: UserProfilePopupProps) {
   const { theme, setTheme } = useTheme(); // Add state for theme
+  const { dispatch } = useAppContext();
 
   const handleThemeChange = (selectedTheme: string) => {
     setTheme(selectedTheme);
@@ -81,9 +82,19 @@ export function UserProfilePopup({
       <Button
         variant='outline'
         className='w-full justify-start mt-2'
-        onClick={(e) => {
+        onClick={async (e) => {
           handleChildClick(e);
-          onSignOut();
+          await signOut();
+          dispatch({ type: "SET_CONVERSATION", payload: [] });
+          dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
+          dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
+          dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
+          dispatch({ type: "SET_DOCUMENTS", payload: [] });
+          dispatch({ type: "SET_USER", payload: null });
+          toast({
+            title: "Sign out successful",
+            description: "You've signed out your account successfully",
+          });
         }}
       >
         <LogOut className='mr-2 h-4 w-4' />
@@ -197,11 +208,16 @@ export function UserProfilePopup({
       <Button
         className='w-full mt-4'
         onClick={(e) => {
-          handleChildClick(e);
-          onUpgrade();
+          dispatch({
+            type:
+              subscriptionStatus === "active"
+                ? "SET_SHOW_TOPUP_MODAL"
+                : "SET_SHOW_UPGRADE_MODAL",
+            payload: true,
+          });
         }}
       >
-        Upgrade Plan
+        {subscriptionStatus === "active" ? "Top Up Credits" : "Upgrade Plan"}
       </Button>
     </div>
   );

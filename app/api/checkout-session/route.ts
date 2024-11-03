@@ -8,65 +8,98 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, userId } = body;
+    const { type, userId, subscription, creditAmount, unitPrice } = body;
 
-    console.log("Received request:", { type, userId });
+    console.log("Received request:", {
+      type,
+      userId,
+      subscription,
+      creditAmount,
+      unitPrice,
+    });
 
-    if (!type || !userId) {
-      console.error("Missing required fields:", { type, userId });
+    if (!userId) {
+      console.error("Missing userId");
       return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
+        JSON.stringify({ error: "Missing userId" }),
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    let priceId: string;
+    let sessionOptions: Stripe.Checkout.SessionCreateParams;
 
-    if (type === "monthly") {
-      priceId = "price_1Q6amqEUCrVZiVZ6gbwGHmAO";
-    } else if (type === "yearly") {
-      priceId = "price_1Q6auXEUCrVZiVZ6m9l5yeMR";
+    if (subscription) {
+      // Handle subscription flow
+      if (!type) {
+        return new Response(
+          JSON.stringify({ error: "Missing subscription type" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      let priceId: string = type === "monthly"
+        ? "price_1Q6amqEUCrVZiVZ6gbwGHmAO"
+        : "price_1Q6auXEUCrVZiVZ6m9l5yeMR";
+
+      sessionOptions = {
+        payment_method_types: ["card"],
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url:
+          `${process.env.NEXT_PUBLIC_BASE_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/billing`,
+        metadata: { userId },
+      };
+
+      // Add discount for yearly subscriptions
+      if (type === "yearly") {
+        sessionOptions.discounts = [{ coupon: "c87BTybf" }];
+      }
     } else {
-      console.error("Invalid subscription type:", type);
-      return new Response(
-        JSON.stringify({ error: "Invalid subscription type" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
+      // Handle top-up flow
+      if (!creditAmount || creditAmount < 10 || creditAmount > 10000) {
+        return new Response(
+          JSON.stringify({
+            error: "Credit amount must be between 10 and 10,000",
+          }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
 
-    console.log("Creating Stripe session with:", { priceId, type, userId });
+      // const unitPrice = 0.01; // $0.01 per word
 
-    const sessionOptions: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"],
-      mode: "subscription",
-      line_items: [
-        {
-          price: priceId,
+      sessionOptions = {
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Proganize AI Credits",
+              description:
+                `Top-up for ${creditAmount.toLocaleString()} AI words`,
+            },
+            unit_amount: Math.round(unitPrice * 100),
+          },
           quantity: 1,
-        },
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/billing`,
-      metadata: { userId },
-    };
-
-    // Only add the discount for yearly subscriptions
-    if (type === "yearly") {
-      sessionOptions.discounts = [
-        {
-          coupon: "c87BTybf",
-        },
-      ];
+        }],
+        success_url:
+          `${process.env.NEXT_PUBLIC_BASE_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/billing`,
+        metadata: { userId, creditAmount },
+      };
     }
 
     const session = await stripe.checkout.sessions.create(sessionOptions);
-
     console.log("Stripe session created:", session.id);
 
     return new Response(JSON.stringify({ sessionId: session.id }), {
@@ -75,8 +108,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error in POST /api/checkout-session:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "An unknown error occurred";
+    const errorMessage = error instanceof Error
+      ? error.message
+      : "An unknown error occurred";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

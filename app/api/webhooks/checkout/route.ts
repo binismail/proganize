@@ -2,10 +2,13 @@ import Stripe from "stripe";
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 import { supabase } from "@/utils/supabase/instance";
+import { addWordCredits } from "@/lib/wordCredit";
+
 type METADATA = {
   userId: string;
   priceId: string;
 };
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(request: NextRequest) {
@@ -30,13 +33,48 @@ export async function POST(request: NextRequest) {
     const customerId = session.customer as string;
 
     console.log(
-      `Checkout completed. Subscription ID: ${subscriptionId}, Customer ID: ${customerId}`
+      `Checkout completed. Subscription ID: ${subscriptionId}, Customer ID: ${customerId}`,
     );
+
+    // Check if this is a credit top-up
+    if (session.metadata?.creditAmount) {
+      try {
+        const updatedCredits = await addWordCredits(
+          session.metadata.userId,
+          parseInt(session.metadata.creditAmount),
+        );
+
+        console.log(
+          `Credits added successfully. New balance: ${updatedCredits}`,
+        );
+        return new Response("Credits added successfully", { status: 200 });
+      } catch (error) {
+        console.error("Error processing credit top-up:", error);
+        return new Response("Server error", { status: 500 });
+      }
+    }
 
     try {
       // Fetch additional details
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       const invoice = await stripe.invoices.retrieve(session.invoice as string);
+
+      // Calculate credits based on subscription interval
+      const subscriptionInterval = subscription.items.data[0].plan.interval;
+      const monthlyCredits = 10000; // Base monthly credit amount
+      const creditAmount = subscriptionInterval === "month"
+        ? monthlyCredits
+        : monthlyCredits * 12;
+
+      // Add word credits
+      if (!session.metadata?.userId) {
+        throw new Error("User ID is required");
+      }
+
+      const updatedCredits = await addWordCredits(
+        session.metadata.userId,
+        creditAmount,
+      );
 
       try {
         await supabase.from("subscriptions").insert({
@@ -45,10 +83,10 @@ export async function POST(request: NextRequest) {
           customer_id: customerId,
           status: subscription.status,
           current_period_end: new Date(
-            subscription.current_period_end * 1000
+            subscription.current_period_end * 1000,
           ).toISOString(),
           current_period_start: new Date(
-            subscription.current_period_start * 1000
+            subscription.current_period_start * 1000,
           ).toISOString(),
           plan_id: subscription.items.data[0].id,
           plan: `Progranize Pro(${
@@ -153,6 +191,6 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   // Handle subscription changes (e.g., plan changes, cancellations)
   console.log(
-    `Subscription updated. ID: ${subscription.id}, Status: ${subscription.status}`
+    `Subscription updated. ID: ${subscription.id}, Status: ${subscription.status}`,
   );
 }

@@ -266,21 +266,90 @@ export default function EnhancedEditor() {
   const exportDocument = async (format: "pdf" | "docx") => {
     if (!currentDocumentId) return;
 
-    const title = "Document"; // Replace with actual document title
+    const title = getDocumentTitle();
 
     switch (format) {
       case "pdf":
-        const docpdf = new jsPDF({
-          format: "a4",
-          unit: "px",
-        });
+        const doc = new jsPDF();
 
-        docpdf.setFont("Inter-Regular", "normal");
-        docpdf.html(generatedDocument, {
-          async callback(doc) {
-            await doc.save("document");
-          },
-        });
+        // First, let's check what content we're actually getting
+        console.log("Generated Document:", generatedDocument);
+
+        // Create a temporary div to handle HTML content
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = generatedDocument;
+
+        // Extract text content and maintain basic formatting
+        let yOffset = 10;
+        const margin = 10;
+        const lineHeight = 7;
+
+        const addTextWithWrapping = (text: string, y: number) => {
+          if (!text || text.trim() === "") return y; // Skip empty text
+
+          const pageWidth = doc.internal.pageSize.width - 2 * margin;
+          const lines = doc.splitTextToSize(text.trim(), pageWidth);
+
+          lines.forEach((line: string) => {
+            if (y > doc.internal.pageSize.height - margin) {
+              doc.addPage();
+              y = margin;
+            }
+            doc.text(line, margin, y);
+            y += lineHeight;
+          });
+
+          return y;
+        };
+
+        // Process the content
+        const processNode = (node: Node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            if (node.textContent && node.textContent.trim() !== "") {
+              yOffset = addTextWithWrapping(node.textContent, yOffset);
+            }
+          } else if (node instanceof HTMLElement) {
+            // Handle element nodes
+            switch (node.tagName.toLowerCase()) {
+              case "h1":
+                doc.setFontSize(24);
+                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
+                doc.setFontSize(12);
+                yOffset += lineHeight * 2;
+                break;
+              case "h2":
+                doc.setFontSize(20);
+                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
+                doc.setFontSize(12);
+                yOffset += lineHeight * 1.5;
+                break;
+              case "p":
+                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
+                yOffset += lineHeight;
+                break;
+              case "div":
+              case "span":
+                // Recursively process child nodes
+                node.childNodes.forEach(processNode);
+                break;
+              default:
+                // For any other elements, just get their text content
+                if (node.textContent && node.textContent.trim() !== "") {
+                  yOffset = addTextWithWrapping(node.textContent, yOffset);
+                }
+            }
+          }
+        };
+
+        // Process all nodes in the temporary div
+        tempDiv.childNodes.forEach(processNode);
+
+        // If no content was added, add a default message
+        if (yOffset === 10) {
+          doc.text("No content available", margin, yOffset);
+        }
+
+        doc.save(`${title}.pdf`);
         break;
 
       case "docx":
@@ -322,6 +391,7 @@ export default function EnhancedEditor() {
   };
 
   const handleUpdate = (newContent: string) => {
+    console.log("New content:", newContent);
     if (currentDocumentId) {
       dispatch({
         type: "SET_GENERATED_DOCUMENT",
@@ -415,11 +485,7 @@ export default function EnhancedEditor() {
                     <span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button
-                            variant='outline'
-                            size='sm'
-                            disabled={!isActiveSubscription}
-                          >
+                          <Button variant='outline' size='sm'>
                             Export
                           </Button>
                         </DropdownMenuTrigger>

@@ -141,6 +141,7 @@ body {
 .document-content h6 {
   font-size: 0.67em;
 }
+
 .document-content ul,
 .document-content ol {
   margin-left: 1.5em;
@@ -164,7 +165,7 @@ body {
   word-wrap: break-word;
 }
 .document-content blockquote {
-  border-left: 3px solid #ccc;
+  border-left: 3px solid #cccc;
   margin: 1em 0;
   padding-left: 1em;
   font-style: italic;

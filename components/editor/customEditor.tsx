@@ -68,17 +68,23 @@ export default function RichTextEditor({
         // Ensure all elements inside have proper direction
         const allElements = tempDiv.getElementsByTagName("*");
         for (let i = 0; i < allElements.length; i++) {
-          const element = allElements[i] as HTMLElement; // Cast to HTMLElement
+          const element = allElements[i] as HTMLElement;
           element.setAttribute("dir", "ltr");
           element.style.textAlign = "left";
         }
 
-        editorRef.current.innerHTML = tempDiv.innerHTML;
-        editorRef.current.dir = "ltr";
+        // Only update if content has changed
+        if (editorRef.current.innerHTML !== tempDiv.innerHTML) {
+          editorRef.current.innerHTML = tempDiv.innerHTML;
+          editorRef.current.dir = "ltr";
+          if (onUpdate) {
+            onUpdate(tempDiv.innerHTML);
+          }
+        }
       }
     };
     convertMarkdownToHTML();
-  }, [state.selectedDocument]);
+  }, [initialContent, onUpdate]);
 
   const saveSelection = useCallback(() => {
     if (isTypingRef.current) return; // Don't save selection while typing
@@ -269,6 +275,11 @@ export default function RichTextEditor({
         }
         .editor-content h2 {
           font-size: 1.5em;
+        }
+        .editor-content code {
+          background: #0000;
+          font-size: 14px;
+          outline: none;
         }
         .editor-content h3 {
           font-size: 1.17em;

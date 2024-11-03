@@ -9,6 +9,10 @@ import { checkAndUpdateConversationCount } from "@/utils/supabaseOperations";
 import Link from "next/link";
 import { Input } from "../ui/input";
 import { ArrowUp, FileUp, X } from "lucide-react";
+import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
+// import { readFileContent } from "@/lib/fileUtils";
+import pdfToText from "react-pdftotext";
+import AnimatedSparklesComponent from "./animatedSpark";
 
 // Update the type definition for conversation
 
@@ -24,93 +28,185 @@ export default function DocumentGenerator({
   documentType: string;
 }) {
   const { state, dispatch } = useAppContext();
-  const { productIdea, isGenerating, conversation, selectedDocument, user } =
-    state;
-
-  const [dailyLimitReached, setDailyLimitReached] = useState(false);
-  const [nextResetTime, setNextResetTime] = useState<Date | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null); // New state for upload status
+  const {
+    productIdea,
+    isGenerating,
+    conversation,
+    selectedDocument,
+    user,
+    wordCredits,
+  } = state;
+  const [documentInfo, setDocumentInfo] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<
     { name: string; extension: string }[]
   >([]); // New state for uploaded file names and extensions
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
 
   const handleGenerateDocument = async () => {
-    dispatch({ type: "SET_IS_GENERATING", payload: true });
+    try {
+      dispatch({ type: "SET_IS_GENERATING", payload: true });
+      dispatch({ type: "SET_OPEN_DOCUMENT", payload: false });
+      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
+      dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
 
-    if (subscriptionStatus !== "active") {
-      const { canProceed, resetTime } = await checkAndUpdateConversationCount(
-        user.id
-      );
-      if (!canProceed) {
-        setDailyLimitReached(true);
+      // Check word credits before generating
+      const remainingCredits = await checkWordCredits(user.id);
+
+      // Estimate required credits (you can adjust this calculation)
+      const estimatedWords = Math.ceil(productIdea.length / 4); // rough estimation
+
+      if (remainingCredits < estimatedWords) {
+        setInsufficientCredits(true);
         dispatch({ type: "SET_IS_GENERATING", payload: false });
-        setNextResetTime(resetTime);
         return;
       }
-    }
 
-    dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
-    dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
+      const userInput = {
+        role: "user",
+        content: productIdea,
+      };
 
-    const userInput = { role: "user", content: productIdea };
-    const updatedConversation = [...conversation, userInput];
-    dispatch({ type: "SET_CONVERSATION", payload: updatedConversation });
+      const updatedConversation = [...conversation, userInput];
 
-    // Clear the input field
-    dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
+      // Clear document content after sending
+      setDocumentInfo("");
+      setUploadedFiles([]);
 
-    // Simulate API call and typing effect
-    const { reply } = await fetch("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({ conversation: updatedConversation }),
-    }).then((res) => res.json());
-
-    // Extract the document content
-    const documentContent = extractDocumentContent(reply);
-
-    // Remove the document content from the reply
-    const cleanedReply = reply.replace(documentContent, "").trim();
-
-    const aiResponse = { role: "system", content: cleanedReply };
-
-    const finalConversation = [...updatedConversation, aiResponse];
-    dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
-
-    dispatch({ type: "SET_IS_GENERATING", payload: false });
-
-    // Save the extracted document content
-    if (documentContent) {
+      // Add thinking message
+      const thinkingMessage = { role: "system", content: "Thinking..." };
       dispatch({
-        type: "SET_GENERATED_DOCUMENT",
-        payload: documentContent,
+        type: "SET_CONVERSATION",
+        payload: [...updatedConversation, thinkingMessage],
       });
-    }
 
-    if (!selectedDocument) {
-      await saveNewDocument(
-        finalConversation as { role: string; content: string }[],
-        documentContent || ""
-      );
-    } else {
-      await updateDocument(
-        finalConversation as { role: string; content: string }[],
-        documentContent || ""
-      );
-    }
+      dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
 
-    dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
+      // Modified API call to include documentInfo separately
+      const { reply } = await fetch("/api/chat", {
+        method: "POST",
+        body: JSON.stringify({
+          conversation: updatedConversation,
+          documentType,
+          template,
+          referenceDocument: documentInfo || null,
+        }),
+      }).then((res) => res.json());
+
+      // Check if this is the first message
+      const isFirstMessage = conversation.length === 0;
+
+      if (isFirstMessage) {
+        const initialTitle = extractInitialTitle(reply);
+        if (initialTitle) {
+          // Update the document with initial title if it's a new document
+          if (!selectedDocument) {
+            await saveNewDocument(
+              updatedConversation as { role: string; content: string }[],
+              "", // No content yet
+              initialTitle
+            );
+          }
+        }
+      } else {
+        // Extract final title and content for subsequent messages
+        const documentContent = extractDocumentContent(reply);
+        const finalTitle = extractFinalTitle(reply) || selectedDocument?.title;
+
+        // Remove the document content and markers from the reply
+        const cleanedReply = reply
+          .replace(
+            /### Generated Document[\s\S]*?### End of Generated Document/,
+            ""
+          )
+          .trim();
+
+        const aiResponse = { role: "system", content: cleanedReply };
+
+        // This will replace the "thinking" message with the actual response
+        const finalConversation = [...updatedConversation, aiResponse];
+        dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
+
+        dispatch({ type: "SET_IS_GENERATING", payload: false });
+
+        // Save the extracted document content
+        if (documentContent) {
+          dispatch({
+            type: "SET_GENERATED_DOCUMENT",
+            payload: documentContent,
+          });
+        }
+
+        if (!selectedDocument) {
+          await saveNewDocument(
+            finalConversation as { role: string; content: string }[],
+            documentContent || "",
+            finalTitle || productIdea
+          );
+        } else {
+          await updateDocument(
+            finalConversation as { role: string; content: string }[],
+            documentContent || "",
+            finalTitle || selectedDocument.title
+          );
+        }
+
+        dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
+
+        // Count words in the response
+        const wordCount = reply.trim().split(/\s+/).length;
+
+        // Deduct credits
+        const updatedCredits = await deductWordCredits(user.id, wordCount);
+        dispatch({
+          type: "SET_WORD_CREDITS",
+          payload: {
+            remaining_credits: updatedCredits,
+            total_words_generated:
+              state.wordCredits?.total_words_generated + wordCount,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error generating document:", error);
+      dispatch({ type: "SET_IS_GENERATING", payload: false });
+
+      if (
+        error instanceof Error &&
+        error.message === "Insufficient word credits"
+      ) {
+        setInsufficientCredits(true);
+      }
+
+      // Remove the thinking message if there's an error
+      dispatch({ type: "SET_CONVERSATION", payload: conversation });
+    }
   };
 
-  // Helper function to extract document content
+  // Updated document content extraction to be more precise
   const extractDocumentContent = (text: string): string => {
-    const documentRegex = /^### [\s\S]*$/m;
+    const documentRegex =
+      /### Generated Document([\s\S]*?)### End of Generated Document/;
     const match = text.match(documentRegex);
-    return match ? match[0] : "";
+    return match ? match[1].trim() : "";
+  };
+
+  // Add new title extraction functions
+  const extractInitialTitle = (text: string): string => {
+    const titleRegex = /### Initial Title:(.*?)(?=\n|$)/;
+    const match = text.match(titleRegex);
+    return match ? match[1].trim() : "";
+  };
+
+  const extractFinalTitle = (text: string): string => {
+    const titleRegex = /### Document Title:(.*?)(?=\n|$)/;
+    const match = text.match(titleRegex);
+    return match ? match[1].replace(/["']/g, "").trim() : "";
   };
 
   const saveNewDocument = async (
     finalConversation: { role: string; content: string }[],
-    content: string
+    content: string,
+    title: string
   ) => {
     if (!user || !user.id) {
       console.error("User not authenticated");
@@ -119,7 +215,7 @@ export default function DocumentGenerator({
 
     const newDocument = {
       user_id: user.id,
-      title: productIdea,
+      title: title,
       content: content,
       conversation: finalConversation,
     };
@@ -143,7 +239,8 @@ export default function DocumentGenerator({
 
   const updateDocument = async (
     finalConversation: { role: string; content: string }[],
-    content: string
+    content: string,
+    title: string
   ) => {
     if (!selectedDocument) {
       console.error("No document selected for update");
@@ -154,6 +251,7 @@ export default function DocumentGenerator({
       .update({
         content: content,
         conversation: finalConversation,
+        title: title,
       })
       .eq("id", selectedDocument.id)
       .select();
@@ -226,25 +324,71 @@ export default function DocumentGenerator({
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0];
-      setUploadStatus("Uploading..."); // Set status to uploading
+
       try {
-        // Extract file name and extension
-        const fileName = file.name;
-        const fileExtension = fileName.split(".").pop() || ""; // Get the file extension
-        setUploadedFiles((prevFiles) => [
-          ...prevFiles,
-          { name: fileName, extension: fileExtension },
-        ]); // Add new file info to the array
-        setUploadStatus("Uploaded"); // Update status to uploaded
+        // Create a FileReader to read the file content
+        const reader = new FileReader();
+        if (event.target.files && event.target.files[0]) {
+          pdfToText(event.target.files[0])
+            .then((text) => setDocumentInfo(text))
+            .catch((error) => console.error("Failed to extract text from pdf"));
+        }
+
+        reader.onload = (e) => {
+          const fileName = file.name;
+          const fileExtension = fileName.split(".").pop() || "";
+
+          // Add file to uploaded files state for display
+          setUploadedFiles((prevFiles) => [
+            ...prevFiles,
+            { name: fileName, extension: fileExtension },
+          ]);
+
+          // Store the content in documentInfo state for reference
+        };
+
+        reader.readAsText(file);
       } catch (error) {
         console.error("Error reading file:", error);
-        setUploadStatus("Upload failed"); // Handle error
       }
     }
   };
 
   return (
     <div>
+      {/* Add credits display */}
+      {state.wordCredits && (
+        <div className='text-sm text-gray-600 mb-2'>
+          Available credits: {state.wordCredits.remaining_credits} words
+        </div>
+      )}
+      {/* Show warning if credits are low */}
+      {state.wordCredits &&
+        state.wordCredits.remaining_credits < 50 &&
+        !insufficientCredits && (
+          <div className='text-amber-500 text-sm mb-2'>
+            Warning: You are running low on credits!
+          </div>
+        )}
+
+      {/* Show error if insufficient credits */}
+      {insufficientCredits && (
+        <div className='bg-red-50 border border-red-200 rounded-lg p-4 mb-4'>
+          <p className='text-red-600 text-sm'>
+            You don't have enough word credits to generate this document.
+            <Button
+              variant='link'
+              className='text-primary ml-2'
+              onClick={() =>
+                dispatch({ type: "SET_SHOW_UPGRADE_MODAL", payload: true })
+              }
+            >
+              Topup
+            </Button>
+          </p>
+        </div>
+      )}
+
       <div className='flex gap-2 py-2'>
         {uploadedFiles.length > 0 && // Display uploaded file names if available
           uploadedFiles.map((file, index) => (
@@ -289,7 +433,6 @@ export default function DocumentGenerator({
                 payload: e.target.value,
               });
             }}
-            disabled={dailyLimitReached}
           />
 
           <div className='flex justify-between w-full p-4'>
@@ -309,11 +452,15 @@ export default function DocumentGenerator({
               className='w-10 h-10  flex items-center justify-center rounded-full bg-black'
               onClick={handleGenerateDocument}
               disabled={
-                !productIdea.trim() || isGenerating || dailyLimitReached
+                !productIdea.trim() ||
+                isGenerating ||
+                insufficientCredits ||
+                (wordCredits?.remaining_credits !== undefined &&
+                  wordCredits.remaining_credits <= 0)
               }
             >
               {isGenerating ? (
-                <Spinner size='sm' />
+                <AnimatedSparklesComponent />
               ) : (
                 <div>
                   <ArrowUp size={15} />

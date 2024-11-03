@@ -72,6 +72,42 @@ export const signIn = async () => {
   }
 };
 
+export const checkAndInitializeUser = async (userId: string) => {
+  try {
+    // Check if user already has word credits
+    const { data: existingCredits, error: checkError } = await supabase
+      .from("word_credits")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    if (checkError && checkError.code === "PGRST116") {
+      // User doesn't have credits yet, initialize them
+      const { data: newCredits, error: insertError } = await supabase
+        .from("word_credits")
+        .insert([
+          {
+            user_id: userId,
+            remaining_credits: 1000,
+            total_words_generated: 0,
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      return { isNewUser: true, credits: newCredits };
+    } else if (checkError) {
+      throw checkError;
+    }
+
+    return { isNewUser: false, credits: existingCredits };
+  } catch (error) {
+    console.error("Error checking/initializing user:", error);
+    throw error;
+  }
+};
+
 export const signUp = async (email: string, password: string) => {
   const { data, error } = await supabase.auth.signUp({
     email,

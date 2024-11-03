@@ -26,7 +26,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
-import { SubscribeModal } from "@/components/shared/subscribeModal";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@radix-ui/react-avatar";
 import { AvatarImage } from "@radix-ui/react-avatar";
@@ -40,7 +39,7 @@ export default function DocumentList() {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false); // State for popover visibility
   const router = useRouter();
   const { state, dispatch } = useAppContext();
-  const { documents, user, isLoading, subscriptionStatus } = state;
+  const { documents, user, isLoading, subscriptionStatus, wordCredits } = state;
 
   interface Document {
     id: string;
@@ -97,23 +96,6 @@ export default function DocumentList() {
     return grouped;
   };
   const { theme, setTheme } = useTheme();
-
-  const premiumPlan = {
-    name: "Pro",
-    monthlyPrice: 20, // Adjust this to your actual price
-    features: [
-      "Share documents publicly with a direct link",
-      "Unlimited collaborators",
-      "Unlimited conversations with your documents",
-      "Download documents in PDF and DOCX formats",
-      "Generate add-ons (user stories, technical requirements, product roadmaps)",
-      "Upload documents for AI-powered enhancement",
-      "Priority support",
-      "Early access to new features",
-    ],
-  };
-
-  const annualDiscount = 0.2; // 20% discount for annual billing
 
   return (
     <div
@@ -212,56 +194,64 @@ export default function DocumentList() {
             {"Sign in to access Pro features"}
             <Sparkles size={15} className='ml-2' />
           </Button>
-          {isSubscribeModalOpen && (
-            <SubscribeModal
-              isOpen={isSubscribeModalOpen}
-              onClose={() => {
-                console.log("Closing subscribe modal"); // Debug log
-                setIsSubscribeModalOpen(false);
-              }}
-              onSubscribe={() => router.push("/subscribe")}
-              plan={premiumPlan}
-              initialIsAnnual={false}
-              annualDiscount={annualDiscount}
-            />
-          )}
         </div>
       )}
+
       {user?.id && (
-        <div
-          className={` mb-4 border flex gap-4 ${!isCollapsed && "p-2 mx-4"} mx-1 cursor-pointer rounded-lg`}
-          onClick={() => {
-            setIsPopoverOpen(!isPopoverOpen);
-          }}
-        >
-          <Avatar className='border-2 border-background inline-block'>
-            <AvatarImage
-              className={`${!isCollapsed && "w-10"}  rounded-lg`}
-              src={user?.user_metadata.avatar_url}
-              alt={user?.name}
-            />
-            <AvatarFallback>{user?.user_metadata.full_name[0]}</AvatarFallback>
-          </Avatar>
-          {!isCollapsed && (
-            <div className='flex items-center gap-2'>
-              <p className='text-sm'>{user?.user_metadata.email}</p>
-              <ChevronsUpDown size={15} />
-            </div>
-          )}
-          {isPopoverOpen && ( // Render the popover conditionally
-            <div className='absolute top-[50%] z-10 bg-background shadow-lg rounded-lg p-4'>
-              <UserProfilePopup
-                user={user}
-                onUpgrade={() => {
-                  setIsPopoverOpen(false);
-                  setIsSubscribeModalOpen(true);
+        <div>
+          <div className='px-4 mb-6'>
+            {!isCollapsed && (
+              <div className='flex items-center justify-between text-sm'>
+                <span className='text-muted-foreground'>AI Words used</span>
+                <span className='tabular-nums'>
+                  {wordCredits
+                    ? `${wordCredits.total_words_generated}/${wordCredits.remaining_credits}`
+                    : "N/A"}
+                </span>
+              </div>
+            )}
+            <div className='h-2 rounded-full bg-muted'>
+              <div
+                className='h-full rounded-full bg-primary transition-all duration-300 w-full'
+                style={{
+                  width: `${wordCredits ? (wordCredits.total_words_generated / (wordCredits.total_words_generated + wordCredits.remaining_credits)) * 100 : 0}%`,
                 }}
-                onSignOut={() => {}}
-                subscriptionStatus={subscriptionStatus}
-              />{" "}
-              {/* Pass user data to UserProfile */}
+              />
             </div>
-          )}
+          </div>
+          <div
+            className={` mb-4 border flex gap-4 ${!isCollapsed && "p-2 mx-4"} mx-1 cursor-pointer rounded-lg`}
+            onClick={() => {
+              setIsPopoverOpen(!isPopoverOpen);
+            }}
+          >
+            <Avatar className='border-2 border-background inline-block'>
+              <AvatarImage
+                className={`${!isCollapsed && "w-10"} rounded-lg`}
+                src={user?.user_metadata.avatar_url}
+                alt={user?.name}
+              />
+              <AvatarFallback>
+                {user?.user_metadata.full_name[0]}
+              </AvatarFallback>
+            </Avatar>
+            {!isCollapsed && (
+              <div className='flex items-center gap-2'>
+                <p className='text-sm'>{user?.user_metadata.email}</p>
+                <ChevronsUpDown size={15} />
+              </div>
+            )}
+            {isPopoverOpen && ( // Render the popover conditionally
+              <div className='absolute top-[50%] z-10 bg-background shadow-lg rounded-lg p-4'>
+                <UserProfilePopup
+                  user={user}
+                  onSignOut={() => {}}
+                  subscriptionStatus={subscriptionStatus}
+                />{" "}
+                {/* Pass user data to UserProfile */}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,5 +1,6 @@
 "use client"; // Add this line at the top of the file
 
+import { getPreviouslyCachedImageOrNull } from "next/dist/server/image-optimizer";
 import {
   createContext,
   useContext,
@@ -43,6 +44,12 @@ interface State {
   savedState: any;
   saveStatus: boolean;
   openDocument: boolean;
+  wordCredits: {
+    remaining_credits: number;
+    total_words_generated: number;
+  } | null;
+  showUpgrade: boolean;
+  showTopup: boolean;
 }
 
 const initialState: State = {
@@ -68,6 +75,9 @@ const initialState: State = {
   savedState: null,
   saveStatus: true,
   openDocument: false,
+  wordCredits: null,
+  showUpgrade: false,
+  showTopup: false,
 };
 
 // Define actions
@@ -93,7 +103,10 @@ type Action =
   | { type: "SET_SUBSCRIPTION_STATUS"; payload: string }
   | { type: "INITIALIZE_STATE"; payload: Partial<State> }
   | { type: "SET_SAVING_STATUS"; payload: boolean }
-  | { type: "SET_OPEN_DOCUMENT"; payload: boolean };
+  | { type: "SET_OPEN_DOCUMENT"; payload: boolean }
+  | { type: "SET_WORD_CREDITS"; payload: any }
+  | { type: "SET_SHOW_UPGRADE_MODAL"; payload: boolean }
+  | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean };
 
 const AppReducer = (state: State, action: Action): State => {
   switch (action.type) {
@@ -141,6 +154,21 @@ const AppReducer = (state: State, action: Action): State => {
       return { ...state, saveStatus: action.payload };
     case "SET_OPEN_DOCUMENT":
       return { ...state, openDocument: action.payload };
+    case "SET_WORD_CREDITS":
+      return {
+        ...state,
+        wordCredits: action.payload,
+      };
+    case "SET_SHOW_UPGRADE_MODAL":
+      return {
+        ...state,
+        showUpgrade: action.payload,
+      };
+    case "SET_SHOW_TOPUP_MODAL":
+      return {
+        ...state,
+        showTopup: action.payload,
+      };
     default:
       return state;
   }
