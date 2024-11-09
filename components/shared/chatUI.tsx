@@ -5,7 +5,13 @@ import DocumentGenerator from "./documentGenerator";
 import { Sparkles, X } from "lucide-react";
 import "./chatUi.css"; // Import the CSS file for styles
 
-export default function AiChat({ isCollapsed, onClose }) {
+export default function AiChat({
+  isCollapsed,
+  onClose,
+}: {
+  isCollapsed: boolean;
+  onClose: any;
+}) {
   return (
     <>
       {!isCollapsed && (

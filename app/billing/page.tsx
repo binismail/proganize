@@ -51,7 +51,6 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
-import { Input } from "@/components/ui/input";
 
 import { checkWordCredits } from "@/lib/wordCredit";
 import { TopUpModal } from "@/components/shared/topUpModal";
@@ -63,7 +62,7 @@ function BillingPageContent() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAnnual, setIsAnnual] = useState(false);
+  const [isAnnual] = useState(false);
   const annualDiscount = 0.2; // 20% discount for annual billing
 
   const premiumPlan = {

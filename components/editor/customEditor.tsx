@@ -59,27 +59,27 @@ export default function RichTextEditor({
 
   useEffect(() => {
     const convertMarkdownToHTML = async () => {
-      if (editorRef.current) {
-        // Create a temporary div to sanitize the content
-        const tempDiv = document.createElement("div");
-        const parsedContent = await marked.parse(initialContent);
-        tempDiv.innerHTML = parsedContent;
+      if (!editorRef.current) return; // Add null check
 
-        // Ensure all elements inside have proper direction
-        const allElements = tempDiv.getElementsByTagName("*");
-        for (let i = 0; i < allElements.length; i++) {
-          const element = allElements[i] as HTMLElement;
-          element.setAttribute("dir", "ltr");
-          element.style.textAlign = "left";
-        }
+      // Create a temporary div to sanitize the content
+      const tempDiv = document.createElement("div");
+      const parsedContent = await marked.parse(initialContent);
+      tempDiv.innerHTML = parsedContent;
 
-        // Only update if content has changed
-        if (editorRef.current.innerHTML !== tempDiv.innerHTML) {
-          editorRef.current.innerHTML = tempDiv.innerHTML;
-          editorRef.current.dir = "ltr";
-          if (onUpdate) {
-            onUpdate(tempDiv.innerHTML);
-          }
+      // Ensure all elements inside have proper direction
+      const allElements = tempDiv.getElementsByTagName("*");
+      for (let i = 0; i < allElements.length; i++) {
+        const element = allElements[i] as HTMLElement;
+        element.setAttribute("dir", "ltr");
+        element.style.textAlign = "left";
+      }
+
+      // Only update if content has changed
+      if (editorRef.current.innerHTML !== tempDiv.innerHTML) {
+        editorRef.current.innerHTML = tempDiv.innerHTML;
+        editorRef.current.dir = "ltr";
+        if (onUpdate) {
+          onUpdate(tempDiv.innerHTML);
         }
       }
     };

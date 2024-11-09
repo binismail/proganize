@@ -1,3 +1,4 @@
+"use client";
 import { useState } from "react";
 import {
   Dialog,
@@ -215,12 +216,12 @@ export default function NewDocument({
               )}
           </div>
           <div>
-            <DocumentGenerator
+            {/* <DocumentGenerator
               subscriptionStatus='inactive'
               placeholderText={getPlaceholderText() || ""} // Pass an empty string if getPlaceholderText() returns null
               documentType={selectedType || ""} // Pass an empty string if selectedType is null
               template={selectedTemplate || ""} // Pass an empty string if selectedTemplate is null
-            />
+            /> */}
           </div>
         </div>
       </DialogContent>

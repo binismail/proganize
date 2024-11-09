@@ -5,9 +5,21 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+function trimConversation(conversation: any[], maxChars: number): any[] {
+  let totalChars = JSON.stringify(conversation).length;
+  while (totalChars > maxChars && conversation.length > 0) {
+    conversation.shift(); // Remove the oldest message
+    totalChars = JSON.stringify(conversation).length;
+  }
+  return conversation;
+}
+
 export async function POST(req: NextRequest) {
   const { conversation, documentType, template, referenceDocument } = await req
     .json();
+
+  // Trim the conversation to not exceed 10,000 characters
+  const trimmedConversation = trimConversation(conversation, 10000);
 
   // Create a context-aware system prompt
   const systemPrompt =
@@ -122,13 +134,13 @@ I understand you're looking to create ${
 
   try {
     const response = await client.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
           content: systemPrompt,
         },
-        ...conversation,
+        ...trimmedConversation,
       ],
     });
 

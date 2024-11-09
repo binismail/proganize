@@ -1,31 +1,21 @@
-import { useRef, useState, useEffect } from "react";
+"use client";
+import { useState } from "react";
 import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
 import { useAppContext } from "@/app/context/appContext";
-import autosize from "autosize";
 import { supabase } from "@/utils/supabase/instance";
-import { Spinner } from "./spinner";
-import { checkAndUpdateConversationCount } from "@/utils/supabaseOperations";
-import Link from "next/link";
-import { Input } from "../ui/input";
 import { ArrowUp, FileUp, X } from "lucide-react";
 import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
-// import { readFileContent } from "@/lib/fileUtils";
-import pdfToText from "react-pdftotext";
 import AnimatedSparklesComponent from "./animatedSpark";
 
-// Update the type definition for conversation
-
 export default function DocumentGenerator({
-  subscriptionStatus,
   placeholderText = "Ask me anything related to your document",
   template,
   documentType,
 }: {
   subscriptionStatus: string;
   placeholderText: string;
-  template: string;
-  documentType: string;
+  template?: string;
+  documentType?: string;
 }) {
   const { state, dispatch } = useAppContext();
   const {
@@ -97,6 +87,10 @@ export default function DocumentGenerator({
 
       if (isFirstMessage) {
         const initialTitle = extractInitialTitle(reply);
+        const cleanedReply = reply
+          .replace(/### Initial Title:.*?(?=\n|$)/, "")
+          .trim();
+
         if (initialTitle) {
           // Update the document with initial title if it's a new document
           if (!selectedDocument) {
@@ -107,9 +101,16 @@ export default function DocumentGenerator({
             );
           }
         }
+
+        // Display the cleaned reply
+        const aiResponse = { role: "system", content: cleanedReply };
+        const finalConversation = [...updatedConversation, aiResponse];
+        dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
+        dispatch({ type: "SET_IS_GENERATING", payload: false });
       } else {
         // Extract final title and content for subsequent messages
         const documentContent = extractDocumentContent(reply);
+
         const finalTitle = extractFinalTitle(reply) || selectedDocument?.title;
 
         // Remove the document content and markers from the reply
@@ -128,29 +129,29 @@ export default function DocumentGenerator({
 
         dispatch({ type: "SET_IS_GENERATING", payload: false });
 
-        // Save the extracted document content
+        // Save the extracted document content only if it's not null
         if (documentContent) {
           dispatch({
             type: "SET_GENERATED_DOCUMENT",
             payload: documentContent,
           });
-        }
 
-        if (!selectedDocument) {
-          await saveNewDocument(
-            finalConversation as { role: string; content: string }[],
-            documentContent || "",
-            finalTitle || productIdea
-          );
-        } else {
-          await updateDocument(
-            finalConversation as { role: string; content: string }[],
-            documentContent || "",
-            finalTitle || selectedDocument.title
-          );
-        }
+          if (!selectedDocument) {
+            await saveNewDocument(
+              finalConversation as { role: string; content: string }[],
+              documentContent,
+              finalTitle || productIdea
+            );
+          } else {
+            await updateDocument(
+              finalConversation as { role: string; content: string }[],
+              documentContent,
+              finalTitle || selectedDocument.title
+            );
+          }
 
-        dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
+          dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
+        }
 
         // Count words in the response
         const wordCount = reply.trim().split(/\s+/).length;
@@ -183,11 +184,11 @@ export default function DocumentGenerator({
   };
 
   // Updated document content extraction to be more precise
-  const extractDocumentContent = (text: string): string => {
+  const extractDocumentContent = (text: string): string | null => {
     const documentRegex =
       /### Generated Document([\s\S]*?)### End of Generated Document/;
     const match = text.match(documentRegex);
-    return match ? match[1].trim() : "";
+    return match ? match[1].trim() : null; // Return null if no match
   };
 
   // Add new title extraction functions
@@ -318,41 +319,41 @@ export default function DocumentGenerator({
     }
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
+  // const handleFileUpload = async (
+  //   event: React.ChangeEvent<HTMLInputElement>
+  // ) => {
+  //   const files = event.target.files;
+  //   if (files && files.length > 0) {
+  //     const file = files[0];
 
-      try {
-        // Create a FileReader to read the file content
-        const reader = new FileReader();
-        if (event.target.files && event.target.files[0]) {
-          pdfToText(event.target.files[0])
-            .then((text) => setDocumentInfo(text))
-            .catch((error) => console.error("Failed to extract text from pdf"));
-        }
+  //     try {
+  //       // Create a FileReader to read the file content
+  //       const reader = new FileReader();
+  //       if (event.target.files && event.target.files[0]) {
+  //         pdfToText(event.target.files[0])
+  //           .then((text) => setDocumentInfo(text))
+  //           .catch((error) => console.error("Failed to extract text from pdf"));
+  //       }
 
-        reader.onload = (e) => {
-          const fileName = file.name;
-          const fileExtension = fileName.split(".").pop() || "";
+  //       reader.onload = (e) => {
+  //         const fileName = file.name;
+  //         const fileExtension = fileName.split(".").pop() || "";
 
-          // Add file to uploaded files state for display
-          setUploadedFiles((prevFiles) => [
-            ...prevFiles,
-            { name: fileName, extension: fileExtension },
-          ]);
+  //         // Add file to uploaded files state for display
+  //         setUploadedFiles((prevFiles) => [
+  //           ...prevFiles,
+  //           { name: fileName, extension: fileExtension },
+  //         ]);
 
-          // Store the content in documentInfo state for reference
-        };
+  //         // Store the content in documentInfo state for reference
+  //       };
 
-        reader.readAsText(file);
-      } catch (error) {
-        console.error("Error reading file:", error);
-      }
-    }
-  };
+  //       reader.readAsText(file);
+  //     } catch (error) {
+  //       console.error("Error reading file:", error);
+  //     }
+  //   }
+  // };
 
   return (
     <div>
@@ -439,8 +440,9 @@ export default function DocumentGenerator({
             <div className='w-10 h-10 flex items-center justify-center rounded bg-gray-100'>
               <input
                 type='file'
-                accept='.txt,.doc,.docx, .pdf' // Specify accepted file types
-                onChange={handleFileUpload}
+                accept='.txt,.doc,.docx, .pdf'
+                disabled // Specify accepted file types
+                // onChange={handleFileUpload}
                 className='hidden' // Hide the default file input
                 id='fileUpload'
               />

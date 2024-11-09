@@ -4,9 +4,18 @@ import { useAppContext } from "@/app/context/appContext";
 import { useEffect, useCallback, useRef, useState } from "react";
 import { supabase } from "@/utils/supabase/instance";
 import debounce from "lodash/debounce";
-import { BetweenVerticalEnd, FilePenLine, Share2Icon } from "lucide-react";
+import { FilePenLine, Share2Icon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Document as PDFDocument,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  pdf,
+} from "@react-pdf/renderer";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,12 +35,13 @@ import { jsPDF } from "jspdf";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import RichTextEditor from "./customEditor";
 import { Toolbar } from "./toolbar";
-import Conversation from "../shared/conversation";
 import AiChat from "../shared/chatUI";
 import { Spinner } from "../shared/spinner";
 
 export default function EnhancedEditor() {
   const { state, dispatch } = useAppContext();
+  const [isLoading, setIsLoading] = useState(true);
+
   const {
     generatedDocument,
     currentDocumentId,
@@ -48,9 +58,6 @@ export default function EnhancedEditor() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null); // Reference to the editor
-  const [currentSelection, setCurrentSelection] = useState<Selection | null>(
-    null
-  );
 
   // Add a new state to track if the user is a viewer
   const [isViewer, setIsViewer] = useState(false);
@@ -137,6 +144,8 @@ export default function EnhancedEditor() {
   useEffect(() => {
     if (currentDocumentId) {
       const fetchDocumentData = async () => {
+        setIsLoading(true);
+
         // Fetch document content
         const { data: documentData, error: documentError } = await supabase
           .from("documents")
@@ -199,6 +208,8 @@ export default function EnhancedEditor() {
             role: item.role,
           }))
         );
+
+        setIsLoading(false);
       };
 
       fetchDocumentData();
@@ -270,86 +281,93 @@ export default function EnhancedEditor() {
 
     switch (format) {
       case "pdf":
-        const doc = new jsPDF();
+        const styles = StyleSheet.create({
+          page: {
+            flexDirection: "column",
+            backgroundColor: "#FFFFFF",
+            padding: 10,
+          },
+          section: {
+            margin: 10,
+            padding: 10,
+            flexGrow: 1,
+          },
+          text: {
+            fontSize: 12,
+          },
+          heading1: {
+            fontSize: 24,
+            marginBottom: 10,
+          },
+          heading2: {
+            fontSize: 20,
+            marginBottom: 8,
+          },
+          paragraph: {
+            marginBottom: 6,
+          },
+        });
 
-        // First, let's check what content we're actually getting
-        console.log("Generated Document:", generatedDocument);
+        const renderHTMLToPDF = (html: string) => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+          const elements = Array.from(doc.body.childNodes);
 
-        // Create a temporary div to handle HTML content
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = generatedDocument;
-
-        // Extract text content and maintain basic formatting
-        let yOffset = 10;
-        const margin = 10;
-        const lineHeight = 7;
-
-        const addTextWithWrapping = (text: string, y: number) => {
-          if (!text || text.trim() === "") return y; // Skip empty text
-
-          const pageWidth = doc.internal.pageSize.width - 2 * margin;
-          const lines = doc.splitTextToSize(text.trim(), pageWidth);
-
-          lines.forEach((line: string) => {
-            if (y > doc.internal.pageSize.height - margin) {
-              doc.addPage();
-              y = margin;
+          return elements.map((node, index) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              return (
+                <Text key={index} style={styles.text}>
+                  {node.textContent}
+                </Text>
+              );
+            } else if (node instanceof HTMLElement) {
+              switch (node.tagName.toLowerCase()) {
+                case "h1":
+                  return (
+                    <Text key={index} style={styles.heading1}>
+                      {node.textContent}
+                    </Text>
+                  );
+                case "h2":
+                  return (
+                    <Text key={index} style={styles.heading2}>
+                      {node.textContent}
+                    </Text>
+                  );
+                case "p":
+                  return (
+                    <Text key={index} style={styles.paragraph}>
+                      {node.textContent}
+                    </Text>
+                  );
+                default:
+                  return (
+                    <Text key={index} style={styles.text}>
+                      {node.textContent}
+                    </Text>
+                  );
+              }
             }
-            doc.text(line, margin, y);
-            y += lineHeight;
+            return null;
           });
-
-          return y;
         };
 
-        // Process the content
-        const processNode = (node: Node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            if (node.textContent && node.textContent.trim() !== "") {
-              yOffset = addTextWithWrapping(node.textContent, yOffset);
-            }
-          } else if (node instanceof HTMLElement) {
-            // Handle element nodes
-            switch (node.tagName.toLowerCase()) {
-              case "h1":
-                doc.setFontSize(24);
-                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
-                doc.setFontSize(12);
-                yOffset += lineHeight * 2;
-                break;
-              case "h2":
-                doc.setFontSize(20);
-                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
-                doc.setFontSize(12);
-                yOffset += lineHeight * 1.5;
-                break;
-              case "p":
-                yOffset = addTextWithWrapping(node.textContent || "", yOffset);
-                yOffset += lineHeight;
-                break;
-              case "div":
-              case "span":
-                // Recursively process child nodes
-                node.childNodes.forEach(processNode);
-                break;
-              default:
-                // For any other elements, just get their text content
-                if (node.textContent && node.textContent.trim() !== "") {
-                  yOffset = addTextWithWrapping(node.textContent, yOffset);
-                }
-            }
-          }
-        };
+        const PDFContent = (
+          <PDFDocument>
+            <Page size='A4' style={styles.page}>
+              <View style={styles.section}>
+                {renderHTMLToPDF(generatedDocument)}
+              </View>
+            </Page>
+          </PDFDocument>
+        );
 
-        // Process all nodes in the temporary div
-        tempDiv.childNodes.forEach(processNode);
+        // Use the pdf function to create a blob
+        const pdfBlob = await pdf(PDFContent).toBlob();
+        saveAs(pdfBlob, `${title}.pdf`);
+        break;
 
-        // If no content was added, add a default message
-        if (yOffset === 10) {
-          doc.text("No content available", margin, yOffset);
-        }
-
-        doc.save(`${title}.pdf`);
+        saveAs(pdfBlob, `${title}.pdf`);
         break;
 
       case "docx":
@@ -438,112 +456,124 @@ export default function EnhancedEditor() {
   return (
     <TooltipProvider>
       <div className='flex h-screen w-full flex-col'>
-        <div className='w-full z-10 bg-background h-40'>
-          <div className='flex justify-between items-center p-4 border-b'>
-            <div className='flex items-center gap-2'>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <FilePenLine className='h-5 w-5 cursor-pointer' />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Edit Document Title</p>
-                </TooltipContent>
-              </Tooltip>
-              <h2 className='text-lg font-semibold'>{getDocumentTitle()}</h2>
-            </div>
-            <div className='flex items-center space-x-4'>
-              <div className='flex -space-x-2'>
-                {collaborators.map((user) => (
-                  <Tooltip key={user.id}>
-                    <TooltipTrigger>
-                      <Avatar className='border-2 border-background w-8 h-8'>
-                        <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback>{user.name[0]}</AvatarFallback>
-                      </Avatar>
+        {isLoading ? (
+          <div className='flex justify-center items-center h-full'>
+            <Spinner /> {/* Or any skeleton UI component */}
+          </div>
+        ) : (
+          <>
+            <div className='w-full z-10 bg-background h-40'>
+              <div className='flex justify-between items-center p-4 border-b'>
+                <div className='flex items-center gap-2'>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <FilePenLine className='h-5 w-5 cursor-pointer' />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>
-                        {user.name} ({user.role})
-                      </p>
+                      <p>Edit Document Title</p>
                     </TooltipContent>
                   </Tooltip>
-                ))}
+                  <h2 className='text-lg font-semibold'>
+                    {getDocumentTitle()}
+                  </h2>
+                </div>
+                <div className='flex items-center space-x-4'>
+                  <div className='flex -space-x-2'>
+                    {collaborators.map((user) => (
+                      <Tooltip key={user.id}>
+                        <TooltipTrigger>
+                          <Avatar className='border-2 border-background w-8 h-8'>
+                            <AvatarImage src={user.avatar} alt={user.name} />
+                            <AvatarFallback>{user.name[0]}</AvatarFallback>
+                          </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            {user.name} ({user.role})
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                  {isOwner && (
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setIsShareModalOpen(true)}
+                    >
+                      <Share2Icon className='mr-2 h-4 w-4' />
+                      Share
+                    </Button>
+                  )}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant='outline' size='sm'>
+                                Export
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem
+                                onSelect={() => exportDocument("pdf")}
+                              >
+                                PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() => exportDocument("docx")}
+                              >
+                                DOCX
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side='bottom' align='end'>
+                        {isActiveSubscription
+                          ? "Export your document"
+                          : "Upgrade to export documents"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
-              {isOwner && (
-                <Button
-                  variant='outline'
-                  size='sm'
-                  onClick={() => setIsShareModalOpen(true)}
-                >
-                  <Share2Icon className='mr-2 h-4 w-4' />
-                  Share
-                </Button>
-              )}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant='outline' size='sm'>
-                            Export
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem
-                            onSelect={() => exportDocument("pdf")}
-                          >
-                            PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => exportDocument("docx")}
-                          >
-                            DOCX
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side='bottom' align='end'>
-                    {isActiveSubscription
-                      ? "Export your document"
-                      : "Upgrade to export documents"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className='flex w-full'>
+                <Toolbar
+                  currentHeading='p' // or dynamic state
+                  onHeadingChange={formatBlock}
+                  onFormatText={formatText}
+                  onAlignText={alignText}
+                  onToggleList={toggleList}
+                  onFormatBlock={formatBlock}
+                />
+              </div>
             </div>
-          </div>
-          <div className='flex w-full'>
-            <Toolbar
-              currentHeading='p' // or dynamic state
-              onHeadingChange={formatBlock}
-              onFormatText={formatText}
-              onAlignText={alignText}
-              onToggleList={toggleList}
-              onFormatBlock={formatBlock}
-            />
-          </div>
-        </div>
-        <div className='flex-grow overflow-y-auto justify-between w-full flex'>
-          <RichTextEditor
-            initialContent={generatedDocument}
-            onUpdate={handleUpdate}
-            editable={!isViewer} // Disable editor if the user is a viewer
-          />
-          <div className={`relative ${isCollapsed === false ? "w-1/2" : ""}`}>
-            {!isViewer && (
-              <AiChat
-                isCollapsed={isCollapsed}
-                onClose={() => setIsCollapsed(!isCollapsed)}
+            <div className='flex-grow overflow-y-auto justify-between w-full flex'>
+              <RichTextEditor
+                initialContent={generatedDocument}
+                onUpdate={handleUpdate}
+                editable={!isViewer} // Disable editor if the user is a viewer
               />
-            )}
-          </div>
-        </div>
-        <ShareModal
-          isOpen={isShareModalOpen}
-          onClose={() => setIsShareModalOpen(false)}
-          documentId={currentDocumentId ?? ""}
-        />
+              <div
+                className={`relative ${isCollapsed === false ? "w-1/2" : ""}`}
+              >
+                {!isViewer && (
+                  <AiChat
+                    isCollapsed={isCollapsed}
+                    onClose={() => setIsCollapsed(!isCollapsed)}
+                  />
+                )}
+              </div>
+            </div>
+            <ShareModal
+              isOpen={isShareModalOpen}
+              onClose={() => setIsShareModalOpen(false)}
+              documentId={currentDocumentId ?? ""}
+            />
+          </>
+        )}
       </div>
     </TooltipProvider>
   );

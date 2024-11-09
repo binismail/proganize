@@ -38,7 +38,10 @@ export default async function PublicDocument(props: {
   }
 
   // Convert markdown to HTML and then sanitize
-  const htmlContent = marked.parse(document?.content || "");
+
+  const content = document?.content; // Ensure content is awaited
+  const htmlContent = marked.parse(content || "");
+  // @ts-ignore eslint-disable-next-line
   const sanitizedContent = DOMPurify.sanitize(htmlContent);
 
   return (

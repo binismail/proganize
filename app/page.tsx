@@ -1,19 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import Nav from "@/components/layout/nav";
-import ProrganizeLogo from "@/asset/Icon-prorganize.png";
-import getUser from "./actions";
-import autosize from "autosize";
-import Image from "next/image";
-import { createClient } from "@supabase/supabase-js";
+
 import { useAppContext } from "./context/appContext";
 import DocumentList from "@/components/document/documentList";
 import Editor from "@/components/editor/editor";
-import Conversation from "@/components/shared/conversation";
-import DocumentGenerator from "@/components/shared/documentGenerator";
 import { supabase } from "@/utils/supabase/instance";
 import {
   checkAndInitializeUser,
@@ -42,10 +34,10 @@ export default function Home() {
   } = state;
 
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     async function fetchUserAndSubscription() {
+      dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
       try {
         const { data } = await supabase.auth.getUser();
         if (data && data.user) {
@@ -167,7 +159,11 @@ export default function Home() {
   return (
     <main className='flex-grow flex'>
       {/* <Nav /> */}
-      {isLoading && <AnimatedSparklesComponent />}
+      {isLoading && (
+        <div className='flex justify-center items-center h-screen w-screen'>
+          <AnimatedSparklesComponent />
+        </div>
+      )}
 
       {!isLoading && (
         <div className='flex w-full'>
@@ -193,7 +189,7 @@ export default function Home() {
               onClose={() =>
                 dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: false })
               }
-              userId={user.id}
+              userId={user?.id}
             />
           )}
 

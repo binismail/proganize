@@ -35,9 +35,7 @@ import { useTheme } from "next-themes";
 
 export default function DocumentList() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false); // State for popover visibility
-  const router = useRouter();
   const { state, dispatch } = useAppContext();
   const { documents, user, isLoading, subscriptionStatus, wordCredits } = state;
 
@@ -70,6 +68,10 @@ export default function DocumentList() {
     dispatch({ type: "SET_CONVERSATION", payload: [] });
     dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
     dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
+  };
+
+  const formatNumberWithCommas = (number: number): string => {
+    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
   const groupDocumentsByDate = (docs: Document[]): GroupedDocuments => {
@@ -203,9 +205,9 @@ export default function DocumentList() {
             {!isCollapsed && (
               <div className='flex items-center justify-between text-sm'>
                 <span className='text-muted-foreground'>AI Words used</span>
-                <span className='tabular-nums'>
+                <span className='tabular-nums text-[10px]'>
                   {wordCredits
-                    ? `${wordCredits.total_words_generated}/${wordCredits.remaining_credits}`
+                    ? `${formatNumberWithCommas(wordCredits.total_words_generated)}/${formatNumberWithCommas(wordCredits.remaining_credits)}`
                     : "N/A"}
                 </span>
               </div>
