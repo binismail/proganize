@@ -67,6 +67,7 @@ export const signIn = async () => {
       redirectTo: `${window.location.origin}/auth/callback`,
     },
   });
+  // console.log(data);
   if (error) {
     console.error("Error signing in:", error);
   }
