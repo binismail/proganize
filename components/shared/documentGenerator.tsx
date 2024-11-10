@@ -204,11 +204,11 @@ export default function DocumentGenerator({
     return match ? match[1].replace(/["']/g, "").trim() : "";
   };
 
-  const saveNewDocument = async (
+  async function saveNewDocument(
     finalConversation: { role: string; content: string }[],
     content: string,
     title: string
-  ) => {
+  ) {
     if (!user || !user.id) {
       console.error("User not authenticated");
       return;
@@ -231,12 +231,14 @@ export default function DocumentGenerator({
     } else if (data && data.length > 0) {
       console.log("Document saved successfully:", data[0]);
       dispatch({ type: "SET_SELECTED_DOCUMENT", payload: data[0] });
-      // setSelectedDocument(data[0]);
+      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
+      dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: data[0].id });
       await fetchDocuments();
+      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
     } else {
       console.error("No data returned when saving document");
     }
-  };
+  }
 
   const updateDocument = async (
     finalConversation: { role: string; content: string }[],

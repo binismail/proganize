@@ -146,15 +146,12 @@ export default function DocumentList() {
               Object.entries(groupDocumentsByDate(documents as Document[])).map(
                 ([group, docs]) =>
                   docs.length > 0 && (
-                    <div key={group}>
-                      <h3 className='text-sm font-medium text-muted-foreground px-2'>
+                    <div key={group} className='px-2'>
+                      <h3 className='text-sm font-medium text-muted-foreground'>
                         {group}
                       </h3>
                       {docs.map((doc: Document) => (
-                        <div
-                          key={doc.id}
-                          className='flex items-center px-2 py-1'
-                        >
+                        <div key={doc.id} className='flex items-center py-1'>
                           <div className='flex-grow'>
                             <DocumentItem document={doc} />
                           </div>

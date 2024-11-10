@@ -76,7 +76,7 @@ export default function Home() {
 
   const premiumPlan = {
     name: "Pro",
-    monthlyPrice: 9.99, // Adjust this to your actual price
+    monthlyPrice: 14.99, // Adjust this to your actual price
     features: [
       "10,000 AI words per month",
       "Publish document to web",
