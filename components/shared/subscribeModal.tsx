@@ -59,10 +59,13 @@ export function SubscribeModal({
       },
       body: JSON.stringify({
         userId: user.id,
+        subscription: true,
         type: isAnnual ? "yearly" : "monthly",
       }),
     });
+    console.log(response);
     const data = await response.json();
+
     await stripe.redirectToCheckout({
       sessionId: data.sessionId,
     });

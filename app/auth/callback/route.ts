@@ -4,9 +4,10 @@ import { createClient } from "@/utils/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  console.log(request);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
+
+  console.log(request);
 
   if (code) {
     const supabase = createClient();
