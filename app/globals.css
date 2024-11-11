@@ -108,6 +108,7 @@ body {
   direction: ltr;
   unicode-bidi: isolate;
   text-align: left;
+  color: #000;
 }
 .document-content p,
 .document-content ul,
