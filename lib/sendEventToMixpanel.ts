@@ -2,6 +2,7 @@ import getUser from "@/app/actions";
 
 const sendEventToMixpanel = async (
     eventName: string,
+    user: any,
     eventProperties?: Record<string, any>,
 ) => {
     //here we are getting the location from a separate endpoint /api/proxy
@@ -19,7 +20,8 @@ const sendEventToMixpanel = async (
         id: urlParams.get("id") || undefined,
     };
 
-    const user = await getUser();
+    // const user = await getUser();
+    // console.log("mixpanel", user);
 
     //Here we are including additional data that will be sent to Mixpanel like device information, UTM parameters and location
     const additionalProperties = {

@@ -109,7 +109,7 @@ export default function DocumentGenerator({
             );
           }
 
-          sendEventToMixpanel("document_generated");
+          sendEventToMixpanel("document_generated", user);
         }
 
         // Display the cleaned reply
@@ -146,7 +146,7 @@ export default function DocumentGenerator({
             payload: documentContent,
           });
 
-          sendEventToMixpanel("document_generated");
+          sendEventToMixpanel("document_generated", user);
 
           if (!selectedDocument) {
             await saveNewDocument(
@@ -170,7 +170,7 @@ export default function DocumentGenerator({
 
         // Deduct credits
         const updatedCredits = await deductWordCredits(user.id, wordCount);
-        sendEventToMixpanel("ai_word_used", { count: wordCount });
+        sendEventToMixpanel("ai_word_used", user, { count: wordCount });
         dispatch({
           type: "SET_WORD_CREDITS",
           payload: {

@@ -75,8 +75,6 @@ export const signIn = async () => {
     },
   });
 
-  sendEventToMixpanel("login");
-
   if (error) {
     console.error("Error signing in:", error);
   }
@@ -106,7 +104,7 @@ export const checkAndInitializeUser = async (userId: string, user: any) => {
         .single();
 
       if (insertError) throw insertError;
-      sendEventToMixpanel("sign_up");
+      sendEventToMixpanel("sign_up", user);
       createUserMixpanel(userId, {
         name: user.user_metadata.full_name,
         email: user.email,
