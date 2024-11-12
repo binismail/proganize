@@ -21,7 +21,7 @@ interface TopUpModalProps {
 export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [wordAmount, setWordAmount] = useState<number>(1000);
-  const PRICE_PER_WORD = 0.001; // $0.001 per word
+  const PRICE_PER_WORD = 0.002;
 
   const calculateTopUpPrice = (words: number) => {
     return words * PRICE_PER_WORD;

@@ -8,15 +8,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, userId, subscription, creditAmount, unitPrice } = body;
-
-    console.log("Received request:", {
-      type,
-      userId,
-      subscription,
-      creditAmount,
-      unitPrice,
-    });
+    const { type, userId, subscription, creditAmount, unitPrice, first50 } =
+      body;
 
     if (!userId) {
       console.error("Missing userId");
@@ -59,7 +52,19 @@ export async function POST(req: NextRequest) {
 
       // Add discount for yearly subscriptions
       if (type === "yearly") {
-        sessionOptions.discounts = [{ coupon: "c87BTybf" }];
+        if (first50 && first50 > 0) {
+          sessionOptions.discounts = [{
+            coupon: process.env.FIRST50YEARLY_COUPON,
+          }];
+        } else {
+          sessionOptions.discounts = [{ coupon: process.env.YEARLY_COUPON }];
+        }
+      } else {
+        if (first50 && first50 > 0) {
+          sessionOptions.discounts = [{
+            coupon: process.env.FIRST50MONTHLY_COUPON,
+          }];
+        }
       }
     } else {
       // Handle top-up flow

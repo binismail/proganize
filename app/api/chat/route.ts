@@ -1,3 +1,4 @@
+import { supabase } from "@/utils/supabase/instance";
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 
@@ -17,6 +18,24 @@ function trimConversation(conversation: any[], maxChars: number): any[] {
 export async function POST(req: NextRequest) {
   const { conversation, documentType, template, referenceDocument } = await req
     .json();
+
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.split(" ")[1];
+  if (!authHeader) {
+    return new Response(
+      "Authorization header missing",
+      { status: 401 },
+    );
+  }
+
+  // Verify the token with Supabase
+  const { data: user, error } = await supabase.auth.getUser(token);
+  if (error || !user) {
+    return new Response(
+      "Unauthorized, invalid token",
+      { status: 401 },
+    );
+  }
 
   // Trim the conversation to not exceed 10,000 characters
   const trimmedConversation = trimConversation(conversation, 10000);

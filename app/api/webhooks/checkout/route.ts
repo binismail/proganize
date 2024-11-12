@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import { supabase } from "@/utils/supabase/instance";
 import { addWordCredits } from "@/lib/wordCredit";
 
+const Mixpanel = require("mixpanel");
+const mixpanel = Mixpanel.init(process.env.MIXPANEL_TOKEN);
+
 type METADATA = {
   userId: string;
   priceId: string;
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
         throw new Error("User ID is required");
       }
 
-      const updatedCredits = await addWordCredits(
+      await addWordCredits(
         session.metadata.userId,
         creditAmount,
       );
@@ -109,6 +112,20 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.log("Error fetching subscription details:", err);
       }
+
+      mixpanel.track("subscription", {
+        distinct_id: session.metadata?.userId,
+        amount: invoice.amount_paid,
+        plan: subscription.items.data[0].plan.interval
+          ? subscription.items.data[0].plan.interval === "month"
+            ? "Monthly"
+            : "Yearly"
+          : "",
+      });
+
+      mixpanel.people.set(session.metadata?.userId, {
+        plan: "Pro",
+      });
 
       // const paymentIntent = await stripe.paymentIntents.retrieve(
       //   invoice.payment_intent as string
@@ -162,17 +179,50 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  // if this is a new subscription ignore, if not update the subscription status to active
-  const { data, error } = await supabase
+  // Retrieve the subscription details
+  const subscriptionId = invoice.subscription as string;
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+  // Calculate credits based on subscription interval
+  const subscriptionInterval = subscription.items.data[0].plan.interval;
+  const monthlyCredits = 10000; // Base monthly credit amount
+  const creditAmount = subscriptionInterval === "month"
+    ? monthlyCredits
+    : monthlyCredits * 12;
+
+  // Add word credits
+  if (invoice.metadata?.userId) {
+    await addWordCredits(invoice.metadata.userId, creditAmount);
+  }
+
+  // Update the subscription status and period in the database
+  await supabase
     .from("subscriptions")
     .update({
       status: "active",
+      current_period_end: new Date(
+        subscription.current_period_end * 1000,
+      ).toISOString(),
+      current_period_start: new Date(
+        subscription.current_period_start * 1000,
+      ).toISOString(),
     })
-    .eq("subscription_id", invoice.subscription as string);
-}
+    .eq("subscription_id", subscriptionId);
 
+  mixpanel.track("subscription", {
+    distinct_id: invoice.metadata?.userId,
+    amount: invoice.amount_paid,
+    plan: subscription.items.data[0].plan.interval
+      ? subscription.items.data[0].plan.interval === "month"
+        ? "Monthly"
+        : "Yearly"
+      : "",
+  });
+}
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  // Handle failed payment (e.g., notify user, update subscription status)
+  console.log(`Payment failed for invoice: ${invoice.id}`);
+
+  // Update the subscription status to inactive
   const { data, error } = await supabase
     .from("subscriptions")
     .update({
@@ -180,11 +230,18 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     })
     .eq("subscription_id", invoice.subscription as string);
 
-  // Update the subscription status in the database
   if (error) {
     console.error("Error updating subscription status:", error);
   } else {
-    console.log("Subscription status updated successfully:", data);
+    console.log("Subscription status updated to inactive:", data);
+  }
+
+  // Optionally, notify the user about the failed payment
+  if (invoice.metadata?.userId) {
+    // Implement your notification logic here, e.g., send an email
+    console.log(
+      `Notify user ${invoice.metadata.userId} about payment failure.`,
+    );
   }
 }
 

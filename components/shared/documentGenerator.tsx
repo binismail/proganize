@@ -6,6 +6,8 @@ import { supabase } from "@/utils/supabase/instance";
 import { ArrowUp, FileUp, X } from "lucide-react";
 import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
 import AnimatedSparklesComponent from "./animatedSpark";
+import { getToken } from "@/utils/supabaseOperations";
+import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
 
 export default function DocumentGenerator({
   placeholderText = "Ask me anything related to your document",
@@ -70,10 +72,16 @@ export default function DocumentGenerator({
       });
 
       dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
+      const token = await getToken();
 
       // Modified API call to include documentInfo separately
       const { reply } = await fetch("/api/chat", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+
         body: JSON.stringify({
           conversation: updatedConversation,
           documentType,
@@ -100,6 +108,8 @@ export default function DocumentGenerator({
               initialTitle
             );
           }
+
+          sendEventToMixpanel("document_generated");
         }
 
         // Display the cleaned reply
@@ -136,6 +146,8 @@ export default function DocumentGenerator({
             payload: documentContent,
           });
 
+          sendEventToMixpanel("document_generated");
+
           if (!selectedDocument) {
             await saveNewDocument(
               finalConversation as { role: string; content: string }[],
@@ -158,6 +170,7 @@ export default function DocumentGenerator({
 
         // Deduct credits
         const updatedCredits = await deductWordCredits(user.id, wordCount);
+        sendEventToMixpanel("ai_word_used", { count: wordCount });
         dispatch({
           type: "SET_WORD_CREDITS",
           payload: {

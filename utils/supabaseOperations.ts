@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase/instance";
 import { Document } from "@/lib/types/type";
 import { data } from "autoprefixer";
+import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
+import createUserMixpanel from "@/lib/createUserMixpanel";
 
 // Document operations
 export const sFetchDocuments = async (id: string) => {
@@ -52,6 +54,11 @@ export const sdeleteDocument = async (id: string) => {
   return { error };
 };
 
+export const getToken = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token;
+};
+
 // User operations
 export const getCurrentUser = async () => {
   const {
@@ -67,13 +74,15 @@ export const signIn = async () => {
       redirectTo: `${window.location.origin}/auth/callback`,
     },
   });
-  // console.log(data);
+
+  sendEventToMixpanel("login");
+
   if (error) {
     console.error("Error signing in:", error);
   }
 };
 
-export const checkAndInitializeUser = async (userId: string) => {
+export const checkAndInitializeUser = async (userId: string, user: any) => {
   try {
     // Check if user already has word credits
     const { data: existingCredits, error: checkError } = await supabase
@@ -97,6 +106,13 @@ export const checkAndInitializeUser = async (userId: string) => {
         .single();
 
       if (insertError) throw insertError;
+      sendEventToMixpanel("sign_up");
+      createUserMixpanel(userId, {
+        name: user.user_metadata.full_name,
+        email: user.email,
+        last_sign_in: user.last_sign_in_at,
+        plan: "free",
+      });
       return { isNewUser: true, credits: newCredits };
     } else if (checkError) {
       throw checkError;
@@ -105,6 +121,37 @@ export const checkAndInitializeUser = async (userId: string) => {
     return { isNewUser: false, credits: existingCredits };
   } catch (error) {
     console.error("Error checking/initializing user:", error);
+    throw error;
+  }
+};
+
+export const remaining50 = async () => {
+  const { data, error } = await supabase
+    .from("first_50")
+    .select("discount_count_remaining")
+    .single();
+
+  return data?.discount_count_remaining;
+};
+
+export const deductFirst50 = async (userId: string, wordCount: number) => {
+  try {
+    const { data, error } = await supabase
+      .from("first_50")
+      .select("discount_count_remaining")
+      .single();
+
+    const { error: updateError } = await supabase
+      .from("first_50")
+      .update({
+        discount_count_remaining: data?.discount_count_remaining - 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error("Error deducting remaining count:", error);
     throw error;
   }
 };

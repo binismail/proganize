@@ -54,6 +54,9 @@ import { Progress } from "@/components/ui/progress";
 
 import { checkWordCredits } from "@/lib/wordCredit";
 import { TopUpModal } from "@/components/shared/topUpModal";
+import { CancelSubscriptionModal } from "@/components/shared/CancelSubscriptionModal";
+import { toast } from "@/hooks/use-toast";
+import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
@@ -67,7 +70,7 @@ function BillingPageContent() {
 
   const premiumPlan = {
     name: "Pro",
-    monthlyPrice: 20,
+    monthlyPrice: 14.99,
     features: [
       "Share documents publicly with a direct link",
       "Unlimited collaborators",
@@ -88,6 +91,7 @@ function BillingPageContent() {
   const MAX_CREDITS = 10000; // Define maximum credits threshold
   const LOW_CREDITS_THRESHOLD = 1000;
   const [paymentData, setPaymentData] = useState<any>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   useEffect(() => {
     const initializePage = async () => {
@@ -169,6 +173,41 @@ function BillingPageContent() {
     }
   };
 
+  const cancelSubscription = async () => {
+    setIsProcessing(true);
+
+    try {
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subId: subscription.subscription_id }),
+      });
+
+      const data = await response.json();
+
+      if (data) {
+        const { error } = await supabase
+          .from("subscriptions")
+          .delete()
+          .eq("subscription_id", subscription.subscription_id);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      dispatch({ type: "SET_SUBSCRIPTION", payload: null });
+      toast({ description: "Subscription cancelled successfully." });
+    } catch (error) {
+      toast({
+        description:
+          "There was an error processing your payment. Please try again.",
+      });
+    }
+  };
+
   const handleSuccessfulPayment = async (sessionId: string) => {
     setIsProcessing(true);
 
@@ -188,6 +227,14 @@ function BillingPageContent() {
         setPaymentData(data);
         setShowConfetti(true);
         setShowModal(true);
+        if (data.metadata) {
+          const creditAmountStr = data?.metadata?.creditAmount;
+          const creditAmount = creditAmountStr
+            ? parseInt(creditAmountStr, 10)
+            : 0;
+          const amountPaid = creditAmount * 0.002;
+          sendEventToMixpanel("topup", { amount: amountPaid });
+        }
       }
 
       // Clear the session_id from the URL
@@ -196,6 +243,13 @@ function BillingPageContent() {
       alert("There was an error processing your payment. Please try again.");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (subscription) {
+      await cancelSubscription();
+      setIsCancelModalOpen(false);
     }
   };
 
@@ -368,7 +422,10 @@ function BillingPageContent() {
                       {subscription.cancel_at_period_end ? (
                         <Button variant='default'>Resume Subscription</Button>
                       ) : (
-                        <Button variant='destructive'>
+                        <Button
+                          variant='destructive'
+                          onClick={() => setIsCancelModalOpen(true)}
+                        >
                           Cancel Subscription
                         </Button>
                       )}
@@ -510,6 +567,11 @@ function BillingPageContent() {
               initialIsAnnual={isAnnual}
               annualDiscount={annualDiscount}
             />
+            <CancelSubscriptionModal
+              isOpen={isCancelModalOpen}
+              onClose={() => setIsCancelModalOpen(false)}
+              onCancel={handleCancelSubscription}
+            />
             {isProcessing && <div>Processing your subscription...</div>}
           </div>
         )}
@@ -520,7 +582,7 @@ function BillingPageContent() {
         onClose={() =>
           dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: false })
         }
-        userId={user.id}
+        userId={user?.id}
       />
     </>
   );

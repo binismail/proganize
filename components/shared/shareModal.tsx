@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import LogoDark from "@/asset/proganize-light-side.svg";
 import {
   Select,
   SelectContent,
@@ -43,7 +44,7 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
   const [isPublic, setIsPublic] = useState(false);
   const [publicLink, setPublicLink] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [documentName, setDocumentName] = useState(""); // Add state for document name
+  const [documentName, setDocumentName] = useState("");
 
   const isActiveSubscription = subscriptionStatus === "active";
 
@@ -189,7 +190,8 @@ export function ShareModal({ isOpen, onClose, documentId }: ShareModalProps) {
           inviterName: user.user_metadata.full_name,
           documentName: documentName, // Replace with actual document name
           inviteLink: inviteLink,
-          role: role, // Include the role in the email
+          role: role,
+          logoUrl: LogoDark,
         }),
       });
 

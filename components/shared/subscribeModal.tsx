@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,10 +9,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Check } from "lucide-react";
+import { Box, Check, GiftIcon } from "lucide-react";
 import { useAppContext } from "@/app/context/appContext";
 import { loadStripe } from "@stripe/stripe-js";
 import { Spinner } from "./spinner";
+import { remaining50 } from "@/utils/supabaseOperations";
 
 interface SubscribeModalProps {
   isOpen: boolean;
@@ -39,10 +40,26 @@ export function SubscribeModal({
   const { state } = useAppContext();
   const { user } = state;
   const [loading, setLoading] = useState(false);
+  const [first50, setFirst50] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchRemaining50 = async () => {
+      const remaining = await remaining50();
+      setFirst50(remaining);
+    };
+    fetchRemaining50();
+  }, []);
 
   const price = isAnnual
-    ? (plan.monthlyPrice * 12 * (1 - annualDiscount)).toFixed(2)
-    : plan.monthlyPrice.toFixed(2);
+    ? (
+        plan.monthlyPrice *
+        12 *
+        (1 - (first50 !== null && first50 > 0 ? 0.5 : annualDiscount))
+      ).toFixed(2)
+    : (
+        plan.monthlyPrice *
+        (1 - (first50 !== null && first50 > 0 ? 0.2 : 0))
+      ).toFixed(2);
 
   const handleSubscribe = async () => {
     setLoading(true);
@@ -61,9 +78,9 @@ export function SubscribeModal({
         userId: user.id,
         subscription: true,
         type: isAnnual ? "yearly" : "monthly",
+        first50,
       }),
     });
-    console.log(response);
     const data = await response.json();
 
     await stripe.redirectToCheckout({
@@ -84,7 +101,7 @@ export function SubscribeModal({
           </DialogDescription>
         </DialogHeader>
         <div className='py-4'>
-          <div className='flex justify-between items-center mb-4'>
+          <div className='flex justify-between items-center mb-2'>
             <span className='text-2xl font-bold'>
               ${price}/{isAnnual ? "year" : "month"}
             </span>
@@ -98,19 +115,32 @@ export function SubscribeModal({
               <span>Annual</span>
             </div>
           </div>
-          <p className='text-sm text-gray-500 mb-4'>
-            {isAnnual ? "Billed annually" : "Billed monthly"}
-            {isAnnual && (
-              <span className='text-green-600 ml-1'>
-                (Save {annualDiscount * 100}%)
-              </span>
-            )}
-          </p>
+          {first50 !== null && first50 > 0 ? (
+            <div className='flex items-center text-[#8f31e3] mb-4'>
+              <GiftIcon />
+              <p className='text-sm'>
+                {isAnnual ? "50" : "20"}% off for the first 50 customers (
+                {first50} left)
+              </p>
+            </div>
+          ) : (
+            <p className='text-sm text-gray-500 mb-4'>
+              {isAnnual
+                ? `Billed annually at $${price}`
+                : `Billed monthly at $${price}`}
+              {isAnnual && (
+                <span className='text-green-600 ml-1'>
+                  (Save {annualDiscount * 100}%)
+                </span>
+              )}
+            </p>
+          )}
+
           <div className='space-y-2'>
             <p className='font-semibold'>Features included:</p>
             {plan.features.map((feature, index) => (
-              <div key={index} className='flex items-start space-x-3'>
-                <Check className='h-5 w-5 text-green-500 mt-0.5 flex-shrink-0' />
+              <div key={index} className='flex items-center space-x-3'>
+                <Check className='h-4 w-4 text-[#8f31e3] mt-0.5 flex-shrink-0' />
                 <span className='text-sm'>{feature}</span>
               </div>
             ))}

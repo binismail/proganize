@@ -38,15 +38,19 @@ export default function Home() {
   useEffect(() => {
     async function fetchUserAndSubscription() {
       dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
+      dispatch({ type: "SET_DOCUMENTS", payload: [] });
       try {
         const { data } = await supabase.auth.getUser();
         if (data && data.user) {
           dispatch({ type: "SET_USER", payload: data.user });
 
           // Check and initialize word credits
-          const { credits } = await checkAndInitializeUser(data.user.id);
+          const { credits } = await checkAndInitializeUser(
+            data.user.id,
+            data.user
+          );
           dispatch({ type: "SET_WORD_CREDITS", payload: credits });
-
+          dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
           dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
           dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
           console.log(data.user);
