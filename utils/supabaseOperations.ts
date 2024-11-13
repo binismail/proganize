@@ -106,10 +106,10 @@ export const checkAndInitializeUser = async (userId: string, user: any) => {
       if (insertError) throw insertError;
       sendEventToMixpanel("sign_up", user);
       createUserMixpanel(userId, {
-        name: user.user_metadata.full_name,
-        email: user.email,
+        $name: user.user_metadata.full_name,
+        $email: user.email,
         last_sign_in: user.last_sign_in_at,
-        plan: "free",
+        plan: "Free",
       });
       return { isNewUser: true, credits: newCredits };
     } else if (checkError) {

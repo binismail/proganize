@@ -60,7 +60,7 @@ import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
-  const { subscription, paymentMethods, invoices, user, showTopup } = state;
+  const { subscription, invoices, user, showTopup } = state;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -140,18 +140,6 @@ function BillingPageContent() {
         throw subscriptionError;
       }
       dispatch({ type: "SET_SUBSCRIPTION", payload: subscriptionData || null });
-
-      // Fetch payment methods
-      const { data: paymentMethodsData, error: paymentMethodsError } =
-        await supabase
-          .from("payment_methods")
-          .select("*")
-          .eq("user_id", userId);
-      if (paymentMethodsError) throw paymentMethodsError;
-      dispatch({
-        type: "SET_PAYMENT_METHODS",
-        payload: paymentMethodsData || [],
-      });
 
       // Fetch invoices
       const { data: invoicesData, error: invoicesError } = await supabase

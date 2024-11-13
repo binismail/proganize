@@ -116,9 +116,11 @@ export function SubscribeModal({
             </div>
           </div>
           {first50 !== null && first50 > 0 ? (
-            <div className='flex items-center text-[#8f31e3] mb-4'>
-              <GiftIcon />
-              <p className='text-sm'>
+            <div className='flex w-full gap-4 items-center text-[#8f31e3] mb-4'>
+              <div className='mr-4'>
+                <GiftIcon />
+              </div>
+              <p className='text-sm ml-4'>
                 {isAnnual ? "50" : "20"}% off for the first 50 customers (
                 {first50} left)
               </p>
