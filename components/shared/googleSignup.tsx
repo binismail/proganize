@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Icons } from "@/components/ui/icons";
 import { signIn } from "@/utils/supabaseOperations";
+import Link from "next/link";
 
 export default function GoogleSignInPopup({
   isOpen,
@@ -41,13 +42,13 @@ export default function GoogleSignInPopup({
         </div>
         <div className='text-center text-sm text-muted-foreground'>
           By signing in, you agree to our{" "}
-          <a href='#' className='underline hover:text-primary'>
+          <Link href='/privacy-terms' className='underline hover:text-primary'>
             Terms of Service
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a href='#' className='underline hover:text-primary'>
+          <Link href='/privacy-terms' className='underline hover:text-primary'>
             Privacy Policy
-          </a>
+          </Link>
           .
         </div>
       </DialogContent>
