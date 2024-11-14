@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
       }
 
       let priceId: string = type === "monthly"
-        ? "price_1Q6amqEUCrVZiVZ6gbwGHmAO"
-        : "price_1Q6auXEUCrVZiVZ6m9l5yeMR";
+        ? process.env.MONHTLY_PRICE_ID ?? "price_1Q6amqEUCrVZiVZ6gbwGHmAO"
+        : process.env.YEARLY_PRICE_ID ?? "price_1Q6auXEUCrVZiVZ6m9l5yeMR";
 
       sessionOptions = {
         payment_method_types: ["card"],
@@ -80,10 +80,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // const unitPrice = 0.01; // $0.01 per word
-
       sessionOptions = {
-        payment_method_types: ["card"],
+        payment_method_types: ["card", "link"],
         mode: "payment",
         line_items: [{
           price_data: {

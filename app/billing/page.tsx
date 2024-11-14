@@ -215,7 +215,7 @@ function BillingPageContent() {
         setPaymentData(data);
         setShowConfetti(true);
         setShowModal(true);
-        if (data.metadata) {
+        if (data.metadata?.creditAmount) {
           const creditAmountStr = data?.metadata?.creditAmount;
           const creditAmount = creditAmountStr
             ? parseInt(creditAmountStr, 10)
