@@ -8,6 +8,7 @@ import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
 import AnimatedSparklesComponent from "./animatedSpark";
 import { getToken } from "@/utils/supabaseOperations";
 import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
+import pdfToText from "react-pdftotext";
 
 export default function DocumentGenerator({
   placeholderText = "Ask me anything related to your document",
@@ -334,41 +335,41 @@ export default function DocumentGenerator({
     }
   };
 
-  // const handleFileUpload = async (
-  //   event: React.ChangeEvent<HTMLInputElement>
-  // ) => {
-  //   const files = event.target.files;
-  //   if (files && files.length > 0) {
-  //     const file = files[0];
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
 
-  //     try {
-  //       // Create a FileReader to read the file content
-  //       const reader = new FileReader();
-  //       if (event.target.files && event.target.files[0]) {
-  //         pdfToText(event.target.files[0])
-  //           .then((text) => setDocumentInfo(text))
-  //           .catch((error) => console.error("Failed to extract text from pdf"));
-  //       }
+      try {
+        // Create a FileReader to read the file content
+        const reader = new FileReader();
+        if (event.target.files && event.target.files[0]) {
+          pdfToText(event.target.files[0])
+            .then((text) => setDocumentInfo(text))
+            .catch((error) => console.error("Failed to extract text from pdf"));
+        }
 
-  //       reader.onload = (e) => {
-  //         const fileName = file.name;
-  //         const fileExtension = fileName.split(".").pop() || "";
+        reader.onload = (e) => {
+          const fileName = file.name;
+          const fileExtension = fileName.split(".").pop() || "";
 
-  //         // Add file to uploaded files state for display
-  //         setUploadedFiles((prevFiles) => [
-  //           ...prevFiles,
-  //           { name: fileName, extension: fileExtension },
-  //         ]);
+          // Add file to uploaded files state for display
+          setUploadedFiles((prevFiles) => [
+            ...prevFiles,
+            { name: fileName, extension: fileExtension },
+          ]);
 
-  //         // Store the content in documentInfo state for reference
-  //       };
+          // Store the content in documentInfo state for reference
+        };
 
-  //       reader.readAsText(file);
-  //     } catch (error) {
-  //       console.error("Error reading file:", error);
-  //     }
-  //   }
-  // };
+        reader.readAsText(file);
+      } catch (error) {
+        console.error("Error reading file:", error);
+      }
+    }
+  };
 
   return (
     <div>
@@ -456,8 +457,8 @@ export default function DocumentGenerator({
               <input
                 type='file'
                 accept='.txt,.doc,.docx, .pdf'
-                disabled // Specify accepted file types
-                // onChange={handleFileUpload}
+                // disabled // Specify accepted file types
+                onChange={handleFileUpload}
                 className='hidden' // Hide the default file input
                 id='fileUpload'
               />

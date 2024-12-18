@@ -50,6 +50,7 @@ interface State {
   } | null;
   showUpgrade: boolean;
   showTopup: boolean;
+  activeTab: string;
 }
 
 const initialState: State = {
@@ -78,6 +79,7 @@ const initialState: State = {
   wordCredits: null,
   showUpgrade: false,
   showTopup: false,
+  activeTab: "writer",
 };
 
 // Define actions
@@ -106,7 +108,8 @@ type Action =
   | { type: "SET_OPEN_DOCUMENT"; payload: boolean }
   | { type: "SET_WORD_CREDITS"; payload: any }
   | { type: "SET_SHOW_UPGRADE_MODAL"; payload: boolean }
-  | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean };
+  | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean }
+  | { type: "SET_ACTIVE_TAB"; payload: string };
 
 const AppReducer = (state: State, action: Action): State => {
   switch (action.type) {
@@ -168,6 +171,11 @@ const AppReducer = (state: State, action: Action): State => {
       return {
         ...state,
         showTopup: action.payload,
+      };
+    case "SET_ACTIVE_TAB":
+      return {
+        ...state,
+        activeTab: action.payload,
       };
     default:
       return state;

@@ -101,14 +101,14 @@ export default function DocumentList() {
 
   return (
     <div
-      className={`transition-all duration-300 h-screen ease-in-out flex flex-col justify-between ${isCollapsed ? "w-12" : "w-1/6"} border-r`}
+      className={`transition-all h-screen duration-300 ease-in-out flex flex-col justify-between ${isCollapsed ? "w-12" : "w-1/6"} border-r`}
     >
       <div>
-        <div className='px-3 py-2'>
+        {/* <div className='px-3 py-2'>
           {!isCollapsed && (
             <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
           )}
-        </div>
+        </div> */}
         <div className='flex justify-between items-center p-2'>
           {!isCollapsed && <h2 className='text-l font-semibold'>Documents</h2>}
           <div className='flex items-center'>
@@ -217,39 +217,6 @@ export default function DocumentList() {
                 }}
               />
             </div>
-          </div>
-          <div
-            className={` mb-4 border flex gap-4 ${!isCollapsed && "p-2 mx-4"} mx-1 cursor-pointer rounded-lg`}
-            onClick={() => {
-              setIsPopoverOpen(!isPopoverOpen);
-            }}
-          >
-            <Avatar className='border-2 border-background inline-block'>
-              <AvatarImage
-                className={`${!isCollapsed && "w-10"} rounded-lg`}
-                src={user?.user_metadata.avatar_url}
-                alt={user?.name}
-              />
-              <AvatarFallback>
-                {user?.user_metadata.full_name[0]}
-              </AvatarFallback>
-            </Avatar>
-            {!isCollapsed && (
-              <div className='flex items-center gap-2'>
-                <p className='text-sm'>{user?.user_metadata.email}</p>
-                <ChevronsUpDown size={15} />
-              </div>
-            )}
-            {isPopoverOpen && ( // Render the popover conditionally
-              <div className='absolute top-[50%] z-10 bg-background shadow-lg rounded-lg p-4'>
-                <UserProfilePopup
-                  user={user}
-                  onSignOut={() => {}}
-                  subscriptionStatus={subscriptionStatus}
-                />{" "}
-                {/* Pass user data to UserProfile */}
-              </div>
-            )}
           </div>
         </div>
       )}

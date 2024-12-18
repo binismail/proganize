@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useAppContext } from "../context/appContext";
 import {
@@ -21,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  CreditCard,
   Download,
   AlertTriangle,
   ChevronLeft,
@@ -29,11 +27,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Check } from "lucide-react"; // Make sure to import the Check icon
-import { Switch } from "@/components/ui/switch";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
 import Confetti from "react-confetti";
 
-import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { Spinner } from "@/components/shared/spinner";
 import { useRouter, useSearchParams } from "next/navigation";

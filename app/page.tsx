@@ -19,6 +19,8 @@ import { useRouter } from "next/navigation";
 import { TopUpModal } from "@/components/shared/topUpModal";
 import AnimatedSparklesComponent from "@/components/shared/animatedSpark";
 import GoogleSignInPopup from "@/components/shared/googleSignup";
+import Nav from "@/components/layout/nav";
+import ChatPage from "@/components/chat/chatLayer";
 
 export default function Home() {
   const { dispatch, state } = useAppContext();
@@ -30,6 +32,7 @@ export default function Home() {
     showUpgrade,
     openDocument,
     isLoading,
+    activeTab,
     showTopup, // Add this to your app context
   } = state;
 
@@ -161,98 +164,102 @@ export default function Home() {
   ];
 
   return (
-    <main className='flex-grow flex'>
-      {/* <Nav /> */}
-      {isLoading && (
-        <div className='flex justify-center items-center h-screen w-screen'>
-          <AnimatedSparklesComponent />
-        </div>
-      )}
+    <div>
+      <Nav />
+      <div>
+        {isLoading && (
+          <div className='flex justify-center items-center h-screen w-screen'>
+            <AnimatedSparklesComponent />
+          </div>
+        )}
 
-      {!isLoading && (
-        <div className='flex w-full'>
-          {/* Conversation sidebar */}
-          <DocumentList />
+        {!isLoading && (
+          <div className='flex w-full'>
+            {/* Conversation sidebar */}
+            <DocumentList />
 
-          {showUpgrade && (
-            <SubscribeModal
-              isOpen={showUpgrade}
-              onClose={() => {
-                dispatch({ type: "SET_SHOW_UPGRADE_MODAL", payload: false });
-              }}
-              onSubscribe={() => router.push("/subscribe")}
-              plan={premiumPlan}
-              initialIsAnnual={false}
-              annualDiscount={annualDiscount}
-            />
-          )}
+            {showUpgrade && (
+              <SubscribeModal
+                isOpen={showUpgrade}
+                onClose={() => {
+                  dispatch({ type: "SET_SHOW_UPGRADE_MODAL", payload: false });
+                }}
+                onSubscribe={() => router.push("/subscribe")}
+                plan={premiumPlan}
+                initialIsAnnual={false}
+                annualDiscount={annualDiscount}
+              />
+            )}
 
-          {showTopup && (
-            <TopUpModal
-              isOpen={showTopup}
-              onClose={() =>
-                dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: false })
-              }
-              userId={user?.id}
-            />
-          )}
-
-          {showInitialContent && (
-            <div className='flex items-center justify-center w-full flex-col'>
-              <h1 className='text-3xl font-bold my-4'>
-                Start your documentation
-              </h1>
-              <p className='mx-auto w-[500px] text-center mb-6 text-sm'>
-                Easily get your ideas to a well detailed document, and organize
-                your product development process in minutes.
-              </p>
-              <Button
-                className='rounded-full'
-                onClick={() =>
-                  !user
-                    ? setShowWelcomePopup(true)
-                    : dispatch({ type: "SET_OPEN_DOCUMENT", payload: true })
+            {showTopup && (
+              <TopUpModal
+                isOpen={showTopup}
+                onClose={() =>
+                  dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: false })
                 }
-              >
-                New Document
-                <PlusIcon size={15} className='ml-2' />
-              </Button>
+                userId={user?.id}
+              />
+            )}
 
-              <div className='flex gap-6 mt-10'>
-                {templates.map((template, index) => (
-                  <Card
-                    key={index}
-                    className='hover:shadow-lg transition-shadow duration-300 rounded-2xl w-[200px] py-2 cursor-pointer'
-                  >
-                    <CardContent className='flex flex-col items-center justify-center p-6'>
-                      <template.icon className='mb-4 text-primary' />
-                      <p className='text-center text-sm'>{template.title}</p>
-                    </CardContent>
-                  </Card>
-                ))}
+            {showInitialContent && activeTab === "write" && (
+              <div className='flex items-center justify-center w-full flex-col'>
+                <h1 className='text-3xl font-bold my-4'>
+                  Start your documentation
+                </h1>
+                <p className='mx-auto w-[500px] text-center mb-6 text-sm'>
+                  Easily get your ideas to a well detailed document, and
+                  organize your product development process in minutes.
+                </p>
+                <Button
+                  className='rounded-full'
+                  onClick={() =>
+                    !user
+                      ? setShowWelcomePopup(true)
+                      : dispatch({ type: "SET_OPEN_DOCUMENT", payload: true })
+                  }
+                >
+                  New Document
+                  <PlusIcon size={15} className='ml-2' />
+                </Button>
+
+                <div className='flex gap-6 mt-10'>
+                  {templates.map((template, index) => (
+                    <Card
+                      key={index}
+                      className='hover:shadow-lg transition-shadow duration-300 rounded-2xl w-[200px] py-2 cursor-pointer'
+                    >
+                      <CardContent className='flex flex-col items-center justify-center p-6'>
+                        <template.icon className='mb-4 text-primary' />
+                        <p className='text-center text-sm'>{template.title}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {isEditorVisible && <Editor />}
-        </div>
-      )}
+            {activeTab === "chat" && <ChatPage />}
 
-      {showWelcomePopup && (
-        <GoogleSignInPopup
-          isOpen={showWelcomePopup}
-          onClose={() => setShowWelcomePopup(false)}
-        />
-      )}
+            {isEditorVisible && <Editor />}
+          </div>
+        )}
 
-      {openDocument && (
-        <NewDocument
-          openDocument={openDocument}
-          onClose={() =>
-            dispatch({ type: "SET_OPEN_DOCUMENT", payload: false })
-          }
-        />
-      )}
-    </main>
+        {showWelcomePopup && (
+          <GoogleSignInPopup
+            isOpen={showWelcomePopup}
+            onClose={() => setShowWelcomePopup(false)}
+          />
+        )}
+
+        {openDocument && (
+          <NewDocument
+            openDocument={openDocument}
+            onClose={() =>
+              dispatch({ type: "SET_OPEN_DOCUMENT", payload: false })
+            }
+          />
+        )}
+      </div>
+    </div>
   );
 }

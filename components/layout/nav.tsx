@@ -6,20 +6,23 @@ import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Moon, Sun } from "lucide-react";
+import { ChevronDown, ChevronsDown, Menu, Moon, Sun } from "lucide-react";
 import Image from "next/image";
-import logoBlack from "@/asset/prorganize-logo.svg";
-import logoWhite from "@/asset/prorganize-white.svg";
-import { createClient } from "@/utils/supabase/client";
+import logoBlack from "@/asset/proganize-dark-side.svg";
+import logoWhite from "@/asset/proganize-light-side.svg";
 import { useAppContext } from "@/app/context/appContext";
 import { signIn, signOut } from "@/utils/supabaseOperations";
 import { supabase } from "@/utils/supabase/instance";
+import { UserProfilePopup } from "../shared/userProfile";
+import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 
 export default function Nav() {
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const { state, dispatch } = useAppContext();
-  const { user } = state;
+  const { user, subscriptionStatus, activeTab } = state;
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -52,64 +55,95 @@ export default function Nav() {
   };
 
   return (
-    <header className='flex h-16 items-center justify-between px-4 md:px-6 bg-background border-b fixed w-full z-50'>
-      <div className='flex items-center gap-16'>
+    <header className='flex py-2 items-center justify-between px-4 md:px-6 bg-background border-b w-full z-50'>
+      <div className='flex items-center  gap-16'>
         <Link href='/' className='flex items-center space-x-2'>
           <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
         </Link>
-        <nav className='hidden md:flex gap-6'>
-          {user ? (
-            <>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/account-setting'
-              >
-                Account Settings
-              </Link>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/billing'
-              >
-                Billing
-              </Link>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/templates'
-              >
-                Templates
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/pricing'
-              >
-                Pricing
-              </Link>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/templates'
-              >
-                Templates
-              </Link>
-            </>
-          )}
-        </nav>
       </div>
+      <nav className='hidden md:flex gap-6'>
+        {user ? (
+          <>
+            <div className='flex gap-10 py-1 px-5 bg-muted justify-between mx-auto rounded-md'>
+              <button
+                className={`text-sm rounded-md px-4 py-2 font-medium transition-colors duration-300 ${activeTab === "write" ? "bg-background" : ""}`}
+                onClick={() =>
+                  dispatch({ type: "SET_ACTIVE_TAB", payload: "write" })
+                }
+              >
+                Write
+              </button>
+              <button
+                className={`text-sm rounded-md font-medium px-4 py-2 transition-colors duration-300 ${activeTab === "chat" ? "bg-background" : ""}`}
+                onClick={() =>
+                  dispatch({ type: "SET_ACTIVE_TAB", payload: "chat" })
+                }
+              >
+                Chat
+              </button>
+              <button
+                className={`text-sm rounded-md px-4 py-2 font-medium transition-colors duration-300 ${activeTab === "bypass" ? "bg-background" : ""}`}
+                onClick={() =>
+                  dispatch({ type: "SET_ACTIVE_TAB", payload: "bypass" })
+                }
+              >
+                Bypass
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Link
+              className='text-sm font-medium hover:underline underline-offset-4'
+              href='/pricing'
+            >
+              Pricing
+            </Link>
+            <Link
+              className='text-sm font-medium hover:underline underline-offset-4'
+              href='/templates'
+            >
+              Templates
+            </Link>
+          </>
+        )}
+      </nav>
       <div className='flex items-center gap-4'>
-        <Button
-          onClick={handleGoogleAuth}
-          variant='outline'
-          className='hidden md:flex'
+        <div
+          className={`flex gap-2 cursor-pointer rounded-lg bg-muted p-2`}
+          onClick={() => {
+            setIsPopoverOpen(!isPopoverOpen);
+          }}
         >
-          {user
-            ? `Logout (${user?.user_metadata?.full_name.split(" ")[0]})`
-            : "Login with Google"}
-        </Button>
+          <Avatar className='inline-block'>
+            <AvatarImage
+              className={`w-6 rounded-full`}
+              src={user?.user_metadata.avatar_url}
+              alt={user?.name}
+            />
+            <AvatarFallback>{user?.user_metadata.full_name[0]}</AvatarFallback>
+          </Avatar>
+          {!isCollapsed && (
+            <div className='flex items-center gap-2'>
+              <p className='text-sm'>{user?.user_metadata.full_name}</p>
+              <ChevronDown size={15} />
+            </div>
+          )}
+          {isPopoverOpen && ( // Render the popover conditionally
+            <div className='absolute top-[70%] right-0 z-10 bg-background shadow-lg rounded-lg p-4'>
+              <UserProfilePopup
+                user={user}
+                onSignOut={() => {}}
+                subscriptionStatus={subscriptionStatus}
+              />{" "}
+              {/* Pass user data to UserProfile */}
+            </div>
+          )}
+        </div>
         {mounted && (
           <Button
             variant='ghost'
+            className='bg-muted'
             size='icon'
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
             aria-label='Toggle theme'
@@ -121,54 +155,6 @@ export default function Nav() {
             )}
           </Button>
         )}
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant='outline' size='icon' className='md:hidden'>
-              <Menu className='h-6 w-6' />
-              <span className='sr-only'>Toggle navigation menu</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side='right'>
-            <nav className='flex flex-col gap-4'>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/pricing'
-              >
-                Pricing
-              </Link>
-              <Link
-                className='text-sm font-medium hover:underline underline-offset-4'
-                href='/templates'
-              >
-                Templates
-              </Link>
-              <Button variant='outline' onClick={handleGoogleAuth}>
-                {user
-                  ? `Logout (${user.user_metadata.full_name.split(" ")[0]})`
-                  : "Login with Google"}
-              </Button>
-              {mounted && (
-                <Button
-                  variant='ghost'
-                  className='w-full justify-start'
-                  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-                >
-                  {theme === "light" ? (
-                    <>
-                      <Moon className='mr-2 h-4 w-4' />
-                      Dark mode
-                    </>
-                  ) : (
-                    <>
-                      <Sun className='mr-2 h-4 w-4' />
-                      Light mode
-                    </>
-                  )}
-                </Button>
-              )}
-            </nav>
-          </SheetContent>
-        </Sheet>
       </div>
     </header>
   );
