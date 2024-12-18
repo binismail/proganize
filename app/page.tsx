@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-
 import { useAppContext } from "./context/appContext";
 import DocumentList from "@/components/document/documentList";
 import Editor from "@/components/editor/editor";
@@ -20,7 +19,6 @@ import { TopUpModal } from "@/components/shared/topUpModal";
 import AnimatedSparklesComponent from "@/components/shared/animatedSpark";
 import GoogleSignInPopup from "@/components/shared/googleSignup";
 import Nav from "@/components/layout/nav";
-import ChatPage from "@/components/chat/chatLayer";
 
 export default function Home() {
   const { dispatch, state } = useAppContext();
@@ -33,7 +31,7 @@ export default function Home() {
     openDocument,
     isLoading,
     activeTab,
-    showTopup, // Add this to your app context
+    showTopup,
   } = state;
 
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
@@ -80,6 +78,11 @@ export default function Home() {
       fetchDocuments();
     }
   }, [user]);
+
+  useEffect(() => {
+    // Set active tab to writer when on home page
+    dispatch({ type: "SET_ACTIVE_TAB", payload: "writer" });
+  }, []);
 
   const premiumPlan = {
     name: "Pro",
@@ -237,8 +240,6 @@ export default function Home() {
                 </div>
               </div>
             )}
-
-            {activeTab === "chat" && <ChatPage />}
 
             {isEditorVisible && <Editor />}
           </div>

@@ -70,6 +70,7 @@ Important:
 Please analyze the document content and respond to queries in a way that demonstrates understanding of the full context while remaining focused on the specific question at hand.`;
 
     try {
+        // Format response with markdown for better readability
         const response = await client.chat.completions.create({
             model: "gpt-4",
             messages: [
@@ -80,15 +81,37 @@ Please analyze the document content and respond to queries in a way that demonst
                 ...trimmedConversation,
             ],
             temperature: 0.7, // Balanced between creativity and accuracy
-            max_tokens: 1000, // Adjust based on your needs
+            max_tokens: 1500, // Increased for more detailed responses
+            response_format: { type: "text" }, // Ensures consistent formatting
         });
 
         if (
             response.choices && response.choices[0] &&
             response.choices[0].message
         ) {
+            // Format the response with markdown
+            let formattedResponse = response.choices[0].message.content || "";
+            
+            // Add citations if they exist in the text
+            formattedResponse = formattedResponse.replace(
+                /\(page \d+\)/g,
+                (match) => `**${match}**`
+            );
+
+            // Enhance code blocks and quotes
+            formattedResponse = formattedResponse.replace(
+                /```([\s\S]*?)```/g,
+                (match, code) => `<pre><code>${code}</code></pre>`
+            );
+
             return new Response(
-                JSON.stringify({ reply: response.choices[0].message.content }),
+                JSON.stringify({ 
+                    reply: formattedResponse,
+                    metadata: {
+                        model: "gpt-4",
+                        tokens: response.usage?.total_tokens || 0
+                    }
+                }),
             );
         } else {
             throw new Error("Unexpected response structure from OpenAI API");

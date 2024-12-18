@@ -1,259 +1,266 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useAppContext } from "@/app/context/appContext";
+import { supabase } from "@/utils/supabase/instance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload } from "lucide-react";
-import PDFViewer from "../pdf/pdfViewer";
 import { getToken } from "@/utils/supabaseOperations";
+import { pdfService } from "@/utils/services/pdfService";
 
-export default function ChatPage() {
-  const [messages, setMessages] = useState<
-    Array<{ role: "user" | "assistant"; content: string }>
-  >([
-    {
-      role: "assistant",
-      content:
-        "Hello! I am your document assistant. Upload a PDF to get started, and I can help you analyze it, answer questions, create summaries, or generate quizzes.",
-    },
-  ]);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [extractedText, setExtractedText] = useState<string>("");
-  const [outline, setOutline] = useState<any[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+}
+
+interface ChatLayerProps {
+  extractedText: string;
+}
+
+export default function ChatLayer({ extractedText }: ChatLayerProps) {
+  const { state } = useAppContext();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type === "application/pdf") {
-      setPdfFile(file);
+  useEffect(() => {
+    if (state.currentPDFConversation) {
+      loadConversation(state.currentPDFConversation.id);
     } else {
-      alert("Please upload a valid PDF file.");
+      // Reset messages when no conversation is selected
+      setMessages([]);
+      setIsLoading(false);
     }
-  };
+  }, [state.currentPDFConversation]);
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
-  };
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const handleTextExtracted = async (text: string) => {
-    setExtractedText((prev) => prev + " " + text);
-    // Once text is extracted, send initial processing request
-    await processDocument(text);
-  };
-
-  const processDocument = async (text: string) => {
-    setIsLoading(true);
-    const token = await getToken();
+  const loadConversation = async (conversationId: string) => {
     try {
-      const response = await fetch("/api/pdf-chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          conversation: [
-            {
-              role: "user",
-              content:
-                "Please analyze this document and provide an initial summary.",
-            },
-          ],
-          referenceDocument: text,
-        }),
-      });
+      setIsLoading(true);
+      const { data: messages, error } = await supabase
+        .from("pdf_conversation_messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
 
-      if (!response.ok) throw new Error("Failed to process document");
+      if (error) throw error;
 
-      const data = await response.json();
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.reply,
-        },
-      ]);
+      if (messages && messages.length > 0) {
+        setMessages(messages);
+      } else {
+        setMessages([
+          {
+            role: "assistant",
+            content:
+              "I'm ready to help you with this document. What would you like to know?",
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
     } catch (error) {
-      console.error("Document processing error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: "Sorry, I encountered an error processing the document.",
-        },
-      ]);
+      console.error("Error loading conversation:", error);
+      alert("Failed to load conversation messages");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleOutlineExtracted = (outlineData: any[]) => {
-    setOutline(outlineData);
-  };
-
-  const renderOutline = (items: any[], level = 0) => {
-    return (
-      <ul className={`pl-${level * 4}`}>
-        {items.map((item, index) => (
-          <li key={index}>
-            <span className='cursor-pointer hover:text-primary'>
-              {item.title}
-            </span>
-            {item.items &&
-              item.items.length > 0 &&
-              renderOutline(item.items, level + 1)}
-          </li>
-        ))}
-      </ul>
-    );
-  };
-
-  const handleSendMessage = async () => {
-    const userInput = inputRef.current?.value;
-    if (!userInput?.trim()) return;
-
-    const userMessage = { role: "user" as const, content: userInput };
-    setMessages((prev) => [...prev, userMessage]);
-
-    if (inputRef.current) inputRef.current.value = "";
+  const sendMessage = async (message: string) => {
+    if (!message.trim() || !state.currentPDFConversation) return;
 
     setIsLoading(true);
-    const token = await getToken();
+    const newMessage: ChatMessage = {
+      role: "user",
+      content: message,
+      created_at: new Date().toISOString(),
+    };
+
     try {
+      // Add user message to UI immediately
+      setMessages((prev) => [...prev, newMessage]);
+
+      // Get the extracted content for context
+      const pdfContent = await pdfService.getExtractedContent(
+        state.currentPDFConversation.id
+      );
+
+      if (!pdfContent?.content) {
+        throw new Error(
+          "PDF content not found. Please try reloading the page."
+        );
+      }
+
+      // Prepare the context by taking first 1000 words and last 1000 words
+      const words = pdfContent.content.split(/\s+/);
+      let contextText = "";
+
+      if (words.length > 2000) {
+        const firstPart = words.slice(0, 1000).join(" ");
+        const lastPart = words.slice(-1000).join(" ");
+        contextText = `${firstPart}\n...[Content truncated for brevity]...\n${lastPart}`;
+      } else {
+        contextText = pdfContent.content;
+      }
+
       const response = await fetch("/api/pdf-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${await getToken()}`,
         },
         body: JSON.stringify({
-          conversation: [...messages, userMessage],
-          referenceDocument: extractedText,
+          conversation: messages.concat(newMessage),
+          referenceDocument: contextText,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to get response");
+      if (!response.ok) throw new Error("Failed to send message");
 
       const data = await response.json();
-      setMessages((prev) => [
-        ...prev,
+
+      // Add assistant's response
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: data.reply,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save messages to database
+      await supabase.from("pdf_conversation_messages").insert([
         {
-          role: "assistant" as const,
-          content: data.reply,
+          conversation_id: state.currentPDFConversation.id,
+          role: newMessage.role,
+          content: newMessage.content,
+          created_at: newMessage.created_at,
+        },
+        {
+          conversation_id: state.currentPDFConversation.id,
+          role: assistantMessage.role,
+          content: assistantMessage.content,
+          created_at: assistantMessage.created_at,
         },
       ]);
     } catch (error) {
-      console.error("Chat error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant" as const,
-          content: "Sorry, I encountered an error processing your request.",
-        },
-      ]);
+      console.error("Error sending message:", error);
+      alert(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setIsLoading(false);
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
     }
   };
 
   return (
-    <div className='flex-1 container grid grid-cols-1 md:grid-cols-[1fr_400px] gap-6 py-6'>
-      {/* PDF Viewer */}
-      <div className='border rounded-lg p-4'>
-        {pdfFile ? (
-          <PDFViewer
-            file={pdfFile}
-            onTextExtracted={handleTextExtracted}
-            onOutlineExtracted={handleOutlineExtracted}
-          />
-        ) : (
-          <div className='aspect-[3/4] bg-muted rounded-lg flex items-center justify-center'>
-            <Button
-              variant='outline'
-              className='gap-2'
-              onClick={triggerFileUpload}
-            >
-              <Upload className='h-4 w-4' />
-              Upload PDF
-            </Button>
-            <input
-              type='file'
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept='application/pdf'
-              className='hidden'
-            />
+    <div className='flex flex-col h-[calc(100vh-4rem)]'>
+      {/* Chat Header */}
+      <div className='p-4 border-b'>
+        <div>
+          <h2 className='font-semibold'>
+            {state.currentPDFConversation?.title || "No Conversation Selected"}
+          </h2>
+          {state.currentPDFConversation && (
+            <p className='text-sm text-muted-foreground'>
+              {state.currentPDFConversation.pdf_name}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className='flex-1 overflow-y-auto scroll-smooth h-[calc(100vh-12rem)] p-4 space-y-4'>
+        {!state.currentPDFConversation ? (
+          <div className='flex items-center justify-center h-full text-muted-foreground'>
+            Select a conversation or start a new chat
           </div>
+        ) : (
+          <>
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${
+                  message.role === "assistant" ? "justify-start" : "justify-end"
+                }`}
+              >
+                <div
+                  className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
+                    message.role === "assistant"
+                      ? "bg-muted prose prose-sm dark:prose-invert max-w-none"
+                      : "bg-primary text-primary-foreground"
+                  }`}
+                >
+                  {message.role === "assistant" ? (
+                    <div
+                      className='whitespace-pre-wrap break-words'
+                      dangerouslySetInnerHTML={{
+                        __html: message.content.replace(/\n/g, "<br/>"),
+                      }}
+                    />
+                  ) : (
+                    <p className='whitespace-pre-wrap break-words'>
+                      {message.content}
+                    </p>
+                  )}
+                  {message.created_at && (
+                    <p className='text-xs mt-1 opacity-70'>
+                      {new Date(message.created_at).toLocaleTimeString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className='flex justify-start'>
+                <div className='bg-muted rounded-lg px-4 py-2 max-w-[80%]'>
+                  <div className='flex space-x-2'>
+                    <div className='w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:-0.3s]' />
+                    <div className='w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:-0.15s]' />
+                    <div className='w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce' />
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
       </div>
 
-      {/* Chat Interface */}
-      <Card className='flex flex-col'>
-        <Tabs defaultValue='chat' className='flex-1'>
-          <TabsList className='w-full justify-start rounded-none border-b bg-transparent p-0'>
-            <TabsTrigger
-              value='chat'
-              className='rounded-none border-b-2 border-b-transparent bg-transparent px-4 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground'
-            >
-              Chat
-            </TabsTrigger>
-            <TabsTrigger
-              value='outline'
-              className='rounded-none border-b-2 border-b-transparent bg-transparent px-4 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:border-b-primary data-[state=active]:text-foreground'
-            >
-              Outline
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value='chat' className='flex-1 p-4'>
-            <div className='flex flex-col gap-4 h-[calc(100vh-220px)]'>
-              <div className='flex-1 overflow-auto'>
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`mb-4 flex ${
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      {message.content}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className='flex gap-2'>
-                <Input
-                  ref={inputRef}
-                  placeholder='Ask a question about your document...'
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-                <Button onClick={handleSendMessage} disabled={isLoading}>
-                  {isLoading ? "Sending..." : "Send"}
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-          <TabsContent value='outline' className='p-4'>
-            {outline.length > 0
-              ? renderOutline(outline)
-              : "No outline available for this document."}
-          </TabsContent>
-        </Tabs>
-      </Card>
+      {/* Input Area */}
+      <div className='p-4 border-t mt-auto'>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const message = inputRef.current?.value || "";
+            if (!message.trim()) return;
+            sendMessage(message);
+          }}
+          className='flex gap-2'
+        >
+          <Input
+            ref={inputRef}
+            placeholder={
+              state.currentPDFConversation
+                ? "Type your message..."
+                : "Select a conversation to start chatting"
+            }
+            disabled={!state.currentPDFConversation || isLoading}
+          />
+          <Button
+            type='submit'
+            disabled={!state.currentPDFConversation || isLoading}
+            variant='default'
+          >
+            Send
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
