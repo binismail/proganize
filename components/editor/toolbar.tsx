@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "../shared/spinner";
 import { useAppContext } from "@/app/context/appContext";
+import { CreditDisplay } from "../shared/creditDisplay";
 
 interface ToolbarProps {
   currentHeading: string;
@@ -140,10 +141,13 @@ export function Toolbar({
           <Quote className='h-4 w-4' />
         </Button>
       </div>
-
-      <div className='w-[100px] h-10 border flex rounded-full items-center justify-center'>
-        <p className='mr-2 text-sm'>{saveStatus ? "saved" : "saving"}</p>
-        {saveStatus ? <CircleCheck size={15} /> : <Spinner size='sm' />}
+      
+      <div className="flex items-center gap-4">
+        <CreditDisplay variant="compact" />
+        <div className='w-[100px] h-10 border flex rounded-full items-center justify-center'>
+          <p className='mr-2 text-sm'>{saveStatus ? "saved" : "saving"}</p>
+          {saveStatus ? <CircleCheck size={15} /> : <Spinner size='sm' />}
+        </div>
       </div>
     </div>
   );

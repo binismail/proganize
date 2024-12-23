@@ -27,7 +27,10 @@ export default function ChatPage() {
   const loadPDFFile = useCallback(async () => {
     if (state.currentPDFConversation?.pdf_url) {
       try {
-        console.log("Getting signed URL for:", state.currentPDFConversation.pdf_url);
+        console.log(
+          "Getting signed URL for:",
+          state.currentPDFConversation.pdf_url
+        );
         const { data: pdfData, error } = await supabase.storage
           .from(STORAGE_CONSTANTS.BUCKET_NAME)
           .createSignedUrl(state.currentPDFConversation.pdf_url, 3600);
@@ -57,7 +60,10 @@ export default function ChatPage() {
   // Update PDF file when conversation changes
   useEffect(() => {
     if (state.currentPDFConversation) {
-      console.log("Loading PDF for conversation:", state.currentPDFConversation.id);
+      console.log(
+        "Loading PDF for conversation:",
+        state.currentPDFConversation.id
+      );
       loadPDFFile();
     } else {
       // Clear PDF file when no conversation is selected
@@ -69,7 +75,7 @@ export default function ChatPage() {
   }, [loadPDFFile, state.currentPDFConversation]);
 
   return (
-    <div className='flex flex-col'>
+    <div className='flex'>
       <Nav />
       <div className='flex flex-1 overflow-hidden'>
         {/* Sidebar - PDF Conversations */}

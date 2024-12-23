@@ -1,223 +1,137 @@
 "use client";
 import { useAppContext } from "@/app/context/appContext";
-import DocumentItem from "./documentItem";
-import {
-  ArrowUpIcon,
-  ChevronsUpDown,
-  Link,
-  PanelLeft,
-  PanelRight,
-  PlusIcon,
-  Sparkle,
-  Sparkles,
-} from "lucide-react";
-import logoBlack from "@/asset/proganize-dark-side.svg";
-import logoWhite from "@/asset/proganize-light-side.svg";
-import Image from "next/image";
-import { parseISO, isToday, isYesterday, isThisWeek } from "date-fns";
+import { parseISO, isToday, isYesterday, isThisWeek, format } from "date-fns";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { signIn } from "@/utils/supabaseOperations";
-import { useState } from "react";
 import { Badge } from "../ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@radix-ui/react-avatar";
-import { AvatarImage } from "@radix-ui/react-avatar";
-import { AvatarFallback } from "@radix-ui/react-avatar";
-import { UserProfilePopup } from "../shared/userProfile";
-import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
+
+interface Document {
+  id: string;
+  title: string;
+  updated_at?: string;
+  created_at: string;
+  user_id: string;
+  content?: string;
+}
+
+interface GroupedDocuments {
+  [key: string]: Document[];
+}
 
 export default function DocumentList() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false); // State for popover visibility
   const { state, dispatch } = useAppContext();
-  const { documents, user, isLoading, subscriptionStatus, wordCredits } = state;
+  const { documents, user, isLoading } = state;
+  const router = useRouter();
 
-  interface Document {
-    id: string;
-    title: string;
-    updated_at?: string;
-    created_at: string;
-    user_id: string; // Add this line
-    // Add other properties as needed
-  }
-
-  // Define the structure of the grouped documents
-  interface GroupedDocuments {
-    Today: Document[];
-    Yesterday: Document[];
-    "This Week": Document[];
-    Earlier: Document[];
-  }
-
-  const startNewDocument = () => {
-    dispatch({ type: "SET_OPEN_DOCUMENT", payload: true });
-    dispatch({ type: "SET_SELECTED_DOCUMENT", payload: null });
-    dispatch({ type: "SET_PRODUCT_IDEA", payload: "" });
-    dispatch({
-      type: "SET_GENERATED_DOCUMENT",
-      payload: "<p>Generated document for: </p>",
-    });
-    dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
-    dispatch({ type: "SET_CONVERSATION", payload: [] });
-    dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
-    dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
-  };
-
-  const formatNumberWithCommas = (number: number): string => {
-    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
-
-  const groupDocumentsByDate = (docs: Document[]): GroupedDocuments => {
-    const grouped: GroupedDocuments = {
-      Today: [],
-      Yesterday: [],
-      "This Week": [],
-      Earlier: [],
-    };
-
-    docs.forEach((doc) => {
+  const groupDocuments = (docs: Document[]): GroupedDocuments => {
+    return docs.reduce((groups: GroupedDocuments, doc) => {
       const date = parseISO(doc.updated_at || doc.created_at);
+      let group = "Older";
+
       if (isToday(date)) {
-        grouped.Today.push(doc);
+        group = "Today";
       } else if (isYesterday(date)) {
-        grouped.Yesterday.push(doc);
+        group = "Yesterday";
       } else if (isThisWeek(date)) {
-        grouped["This Week"].push(doc);
-      } else {
-        grouped.Earlier.push(doc);
+        group = "This Week";
       }
-    });
 
-    return grouped;
+      if (!groups[group]) {
+        groups[group] = [];
+      }
+      groups[group].push(doc);
+      return groups;
+    }, {});
   };
-  const { theme, setTheme } = useTheme();
 
-  return (
-    <div
-      className={`transition-all h-screen duration-300 ease-in-out flex flex-col justify-between ${isCollapsed ? "w-12" : "w-1/6"} border-r`}
-    >
-      <div>
-        {/* <div className='px-3 py-2'>
-          {!isCollapsed && (
-            <Image alt='LOGO' src={theme === "light" ? logoBlack : logoWhite} />
-          )}
-        </div> */}
-        <div className='flex justify-between items-center p-2'>
-          {!isCollapsed && <h2 className='text-l font-semibold'>Documents</h2>}
-          <div className='flex items-center'>
-            {!isCollapsed && (
-              <PlusIcon
-                onClick={startNewDocument}
-                size={25}
-                className='p-1 border rounded cursor-pointer mr-2'
-              />
-            )}
-            <Button
-              variant='ghost'
-              size='icon'
-              onClick={() => setIsCollapsed(!isCollapsed)}
-            >
-              {isCollapsed ? <PanelLeft size={20} /> : <PanelRight size={20} />}
-            </Button>
-          </div>
-        </div>
-        {!isCollapsed && (
-          <>
-            {isLoading ? (
-              // Skeleton loader
-              <>
-                {[...Array(3)].map((_, index) => (
-                  <div key={index} className='space-y-2 mt-4'>
-                    <Skeleton className='h-4 w-[100px]' />
-                    <Skeleton className='h-10 w-full' />
-                    <Skeleton className='h-10 w-full' />
-                  </div>
-                ))}
-              </>
-            ) : (
-              // Updated document list
-              Object.entries(groupDocumentsByDate(documents as Document[])).map(
-                ([group, docs]) =>
-                  docs.length > 0 && (
-                    <div key={group} className='px-2'>
-                      <h3 className='text-sm font-medium text-muted-foreground'>
-                        {group}
-                      </h3>
-                      {docs.map((doc: Document) => (
-                        <div key={doc.id} className='flex items-center py-1'>
-                          <div className='flex-grow'>
-                            <DocumentItem document={doc} />
-                          </div>
-                          {doc.user_id !== user.id && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge
-                                    variant='secondary'
-                                    className='ml-2 flex-shrink-0'
-                                  >
-                                    S
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>This document is shared with you</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )
-              )
-            )}
-          </>
-        )}
-      </div>
-      {!user?.id && !isCollapsed && (
-        <div className='px-2 mb-4'>
-          <Button
-            variant='outline'
-            className='w-full'
-            onClick={() => {
-              signIn();
-            }}
-          >
-            {"Sign in to access Pro features"}
-            <Sparkles size={15} className='ml-2' />
+  const handleDocumentClick = (doc: Document) => {
+    dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
+    dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: doc.id });
+    dispatch({ type: "SET_GENERATED_DOCUMENT", payload: doc.content || "" });
+    dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
+  };
+
+  if (!user) {
+    return (
+      <div className='p-4 space-y-4'>
+        <div className='text-center space-y-2'>
+          <p className='text-sm text-muted-foreground'>
+            Sign in to view your documents
+          </p>
+          <Button onClick={() => signIn()} variant='default' size='sm'>
+            Sign In
           </Button>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {user?.id && (
-        <div>
-          <div className='px-4 mb-6'>
-            {!isCollapsed && (
-              <div className='flex items-center justify-between text-sm'>
-                <span className='text-muted-foreground'>AI Words used</span>
-                <span className='tabular-nums text-[10px]'>
-                  {wordCredits
-                    ? `${formatNumberWithCommas(wordCredits.total_words_generated)}/${formatNumberWithCommas(wordCredits.remaining_credits)}`
-                    : "N/A"}
-                </span>
-              </div>
-            )}
-            <div className='h-2 rounded-full bg-muted'>
-              <div
-                className='h-full rounded-full bg-primary transition-all duration-300 w-full'
-                style={{
-                  width: `${wordCredits ? (wordCredits.total_words_generated / (wordCredits.total_words_generated + wordCredits.remaining_credits)) * 100 : 0}%`,
-                }}
-              />
+  if (isLoading) {
+    return (
+      <div className='p-4 space-y-4'>
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className='h-16 w-full' />
+        ))}
+      </div>
+    );
+  }
+
+  const groupedDocuments = groupDocuments(documents || []);
+  const groups = ["Today", "Yesterday", "This Week", "Older"];
+
+  return (
+    <div className='p-2 space-y-4'>
+      {groups.map((group) => {
+        const docs = groupedDocuments[group];
+        if (!docs?.length) return null;
+
+        return (
+          <div key={group} className='space-y-2'>
+            <h3 className='text-sm font-medium text-muted-foreground px-2'>
+              {group}
+            </h3>
+            <div className='space-y-1'>
+              {docs.map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => handleDocumentClick(doc)}
+                  className={cn(
+                    "w-full text-left px-2 py-2 rounded-lg hover:bg-muted",
+                    "transition-colors duration-200",
+                    "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  )}
+                >
+                  <div className='flex justify-between items-start'>
+                    <div className='space-y-1'>
+                      <p className='text-sm font-medium line-clamp-1'>
+                        {doc.title || "Untitled"}
+                      </p>
+                      <p className='text-xs text-muted-foreground'>
+                        {format(
+                          parseISO(doc.updated_at || doc.created_at),
+                          "MMM d, h:mm a"
+                        )}
+                      </p>
+                    </div>
+                    {doc.content && (
+                      <Badge variant='secondary' className='text-xs'>
+                        {doc.content.length.toLocaleString()} chars
+                      </Badge>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
+        );
+      })}
+
+      {!documents?.length && (
+        <div className='text-center p-4'>
+          <p className='text-sm text-muted-foreground'>No documents yet</p>
         </div>
       )}
     </div>

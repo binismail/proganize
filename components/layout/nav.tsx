@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ChevronDown, ChevronsDown, Menu, Moon, Sun } from "lucide-react";
+import {
+  Menu,
+  Moon,
+  Sun,
+  Home,
+  PenTool,
+  FileText,
+  Book,
+  ChartBar,
+  Settings,
+} from "lucide-react";
 import Image from "next/image";
 import logoBlack from "@/asset/proganize-dark-side.svg";
 import logoWhite from "@/asset/proganize-light-side.svg";
@@ -15,14 +25,35 @@ import { signIn, signOut } from "@/utils/supabaseOperations";
 import { supabase } from "@/utils/supabase/instance";
 import { UserProfilePopup } from "../shared/userProfile";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
+import { cn } from "@/lib/utils";
+import { CreditDisplay } from "../shared/creditDisplay";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 export default function Nav() {
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const { state, dispatch } = useAppContext();
-  const { user, subscriptionStatus, activeTab } = state;
+  const { user } = state;
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const navigation = [
+    { name: "Dashboard", href: "/", icon: Home },
+    { name: "Write", href: "/write", icon: PenTool },
+    { name: "PDF Tools", href: "/pdf", icon: FileText },
+    { name: "Study", href: "/study", icon: Book },
+    { name: "Analytics", href: "/analytics", icon: ChartBar },
+    { name: "Settings", href: "/settings", icon: Settings },
+  ];
 
   useEffect(() => {
     setMounted(true);
@@ -39,125 +70,162 @@ export default function Nav() {
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, []);
 
   const handleGoogleAuth = async () => {
     if (user) {
-      // Logout
       await signOut();
       dispatch({ type: "SET_CONVERSATION", payload: [] });
       dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
       dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
       dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
+      router.push("/");
     } else {
       await signIn();
     }
   };
 
   return (
-    <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
-      <div className='container flex h-14 items-center justify-between'>
-        <div className='mr-4 hidden md:flex'>
-          <Link href='/' className='mr-6 flex items-center space-x-2'>
+    <nav
+      className={cn(
+        "flex flex-col h-screen border-r border-gray-200 dark:border-gray-800",
+        isCollapsed ? "w-16" : "w-64"
+      )}
+    >
+      <div className='p-4 flex items-center justify-between'>
+        {!isCollapsed && (
+          <Link href='/'>
             <Image
               src={theme === "dark" ? logoWhite : logoBlack}
               alt='Proganize Logo'
               width={120}
-              height={50}
-              priority
+              height={30}
+              className='cursor-pointer'
             />
           </Link>
-          <nav className='flex items-center space-x-6 text-sm font-medium'>
+        )}
+        <Button
+          variant='ghost'
+          size='icon'
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
+          <Menu className='h-4 w-4' />
+        </Button>
+      </div>
+
+      <div className='flex-1 px-3 py-4 space-y-1'>
+        {navigation.map((item) => {
+          const isActive = pathname === item.href;
+          return (
             <Link
-              href='/'
-              className={`transition-colors hover:text-foreground/80 ${
-                activeTab === "writer"
-                  ? "text-foreground"
-                  : "text-foreground/60"
-              }`}
-              onClick={() =>
-                dispatch({ type: "SET_ACTIVE_TAB", payload: "writer" })
-              }
-            >
-              Write
-            </Link>
-            <Link
-              href='/chat'
-              className={`transition-colors hover:text-foreground/80 ${
-                activeTab === "chat" ? "text-foreground" : "text-foreground/60"
-              }`}
-              onClick={() =>
-                dispatch({ type: "SET_ACTIVE_TAB", payload: "chat" })
-              }
-            >
-              Chat
-            </Link>
-            <Link
-              href='/bypass'
-              className={`transition-colors hover:text-foreground/80 ${
-                activeTab === "bypass"
-                  ? "text-foreground"
-                  : "text-foreground/60"
-              }`}
-              onClick={() =>
-                dispatch({ type: "SET_ACTIVE_TAB", payload: "bypass" })
-              }
-            >
-              Bypass
-            </Link>
-          </nav>
-        </div>
-        <div className='flex items-center gap-4'>
-          <div
-            className={`flex gap-2 cursor-pointer rounded-lg bg-muted p-2`}
-            onClick={() => {
-              setIsPopoverOpen(!isPopoverOpen);
-            }}
-          >
-            <Avatar className='inline-block'>
-              <AvatarImage
-                className={`w-6 rounded-full`}
-                src={user?.user_metadata.avatar_url}
-                alt={user?.user_metadata.full_namename}
-              />
-              <AvatarFallback>
-                {user?.user_metadata.full_name[0]}
-              </AvatarFallback>
-            </Avatar>
-            {!isCollapsed && (
-              <div className='flex items-center gap-2'>
-                <p className='text-sm'>{user?.user_metadata.full_name}</p>
-                <ChevronDown size={15} />
-              </div>
-            )}
-            {isPopoverOpen && ( // Render the popover conditionally
-              <div className='absolute top-[70%] right-0 z-10 bg-background shadow-lg rounded-lg p-4'>
-                <UserProfilePopup
-                  user={user}
-                  onSignOut={() => {}}
-                  subscriptionStatus={subscriptionStatus}
-                />{" "}
-                {/* Pass user data to UserProfile */}
-              </div>
-            )}
-          </div>
-          {mounted && (
-            <Button
-              variant='ghost'
-              className='bg-muted'
-              size='icon'
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              aria-label='Toggle theme'
-            >
-              {theme === "light" ? (
-                <Moon className='h-6 w-6' />
-              ) : (
-                <Sun className='h-6 w-6' />
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted",
+                isCollapsed && "justify-center"
               )}
-            </Button>
+            >
+              <item.icon
+                className={cn("h-5 w-5", isCollapsed ? "mr-0" : "mr-3")}
+              />
+              {!isCollapsed && <span>{item.name}</span>}
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className='p-4 border-t border-gray-200 dark:border-gray-800'>
+        <Button
+          variant='ghost'
+          size='icon'
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className='w-full'
+        >
+          {theme === "dark" ? (
+            <Sun className='h-4 w-4' />
+          ) : (
+            <Moon className='h-4 w-4' />
+          )}
+        </Button>
+
+        <div className='flex items-center gap-4'>
+          <CreditDisplay variant='minimal' />
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant='ghost'
+                  className='relative h-8 w-8 rounded-full'
+                >
+                  <Avatar className='h-8 w-8'>
+                    <AvatarImage
+                      src={user.user_metadata.avatar_url}
+                      alt={user.user_metadata.full_name}
+                    />
+                    <AvatarFallback>
+                      {user.user_metadata.full_name?.charAt(0) || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className='w-56' align='end' forceMount>
+                <DropdownMenuLabel className='font-normal'>
+                  <div className='flex flex-col space-y-1'>
+                    <p className='text-sm font-medium leading-none'>
+                      {user.user_metadata.full_name}
+                    </p>
+                    <p className='text-xs leading-none text-muted-foreground'>
+                      {user.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => signOut()}>
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
+
+        {user ? (
+          <div className='mt-4'>
+            <Button
+              variant='ghost'
+              className={cn("w-full", isCollapsed ? "p-2" : "")}
+              onClick={() => setIsPopoverOpen(true)}
+            >
+              <Avatar className='h-6 w-6'>
+                <AvatarImage src={user.user_metadata?.avatar_url} />
+                <AvatarFallback>
+                  {user.email?.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              {!isCollapsed && (
+                <span className='ml-2 truncate'>{user.email}</span>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant='default'
+            className={cn("w-full mt-4", isCollapsed ? "p-2" : "")}
+            onClick={handleGoogleAuth}
+          >
+            {isCollapsed ? "Sign In" : "Sign in with Google"}
+          </Button>
+        )}
       </div>
-    </header>
+
+      {isPopoverOpen && (
+        <UserProfilePopup
+          isOpen={isPopoverOpen}
+          onClose={() => setIsPopoverOpen(false)}
+        />
+      )}
+    </nav>
   );
 }
