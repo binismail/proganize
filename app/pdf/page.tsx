@@ -8,12 +8,18 @@ import { useState, useCallback, useEffect } from "react";
 import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { STORAGE_CONSTANTS } from "@/utils/constants";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AnalysisPanel } from "@/components/pdf/analysisPanel"; // Import pdfService
+import { pdfService } from "@/utils/services/pdfService";
 
 export default function ChatPage() {
   const { state } = useAppContext();
   const [extractedText, setExtractedText] = useState("");
   const [outline, setOutline] = useState<any[]>([]);
   const [pdfFile, setPdfFile] = useState<string | null>(null);
+  const [savedContent, setSavedContent] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleTextExtracted = useCallback((text: string) => {
     setExtractedText(text);
@@ -25,65 +31,78 @@ export default function ChatPage() {
 
   // Load PDF file when conversation changes
   const loadPDFFile = useCallback(async () => {
-    if (state.currentPDFConversation?.pdf_url) {
-      try {
-        console.log(
-          "Getting signed URL for:",
-          state.currentPDFConversation.pdf_url
-        );
-        const { data: pdfData, error } = await supabase.storage
-          .from(STORAGE_CONSTANTS.BUCKET_NAME)
-          .createSignedUrl(state.currentPDFConversation.pdf_url, 3600);
+    if (!state.currentPDFConversation?.pdf_url || !state.user?.id) {
+      console.log("No PDF URL in current conversation or no user");
+      setPdfFile(null);
+      setSavedContent("");
+      return;
+    }
 
-        if (error) {
-          console.error("Error getting signed URL:", error);
-          throw error;
-        }
+    setIsLoading(true);
+    setError(null);
 
-        if (pdfData?.signedUrl) {
-          console.log("Got signed URL:", pdfData.signedUrl);
-          setPdfFile(pdfData.signedUrl);
-        } else {
-          console.error("No signed URL returned");
-          setPdfFile(null);
-        }
-      } catch (error) {
-        console.error("Error loading PDF:", error);
+    try {
+      // Get the saved content first
+      const content = await pdfService.getExtractedContent(
+        state.currentPDFConversation.id,
+        state.user.id
+      );
+      
+      if (content?.content) {
+        console.log("Using saved content for analysis");
+        setSavedContent(content.content);
+      }
+
+      // Get signed URL for PDF viewing
+      const { data: pdfData, error: urlError } = await supabase.storage
+        .from(STORAGE_CONSTANTS.BUCKET_NAME)
+        .createSignedUrl(state.currentPDFConversation.pdf_url, 3600);
+
+      if (urlError) {
+        console.error("Error getting signed URL:", urlError);
+        setError("Failed to load PDF. Please try again.");
+        setPdfFile(null);
+        return;
+      }
+
+      if (pdfData?.signedUrl) {
+        console.log("Got signed URL");
+        setPdfFile(pdfData.signedUrl);
+      } else {
+        console.error("No signed URL returned");
+        setError("Failed to load PDF. Please try again.");
         setPdfFile(null);
       }
-    } else {
-      console.log("No PDF URL in current conversation");
+    } catch (error) {
+      console.error("Error loading PDF:", error);
+      setError("An unexpected error occurred. Please try again.");
       setPdfFile(null);
+    } finally {
+      setIsLoading(false);
     }
-  }, [state.currentPDFConversation]);
+  }, [state.currentPDFConversation, state.user?.id]);
 
   // Update PDF file when conversation changes
   useEffect(() => {
-    if (state.currentPDFConversation) {
-      console.log(
-        "Loading PDF for conversation:",
-        state.currentPDFConversation.id
-      );
-      loadPDFFile();
-    } else {
-      // Clear PDF file when no conversation is selected
-      console.log("Clearing PDF file - no conversation selected");
+    loadPDFFile();
+  }, [loadPDFFile]);
+
+  // Clear states when conversation is cleared
+  useEffect(() => {
+    if (!state.currentPDFConversation) {
       setPdfFile(null);
       setExtractedText("");
       setOutline([]);
+      setSavedContent("");
+      setError(null);
     }
-  }, [loadPDFFile, state.currentPDFConversation]);
+  }, [state.currentPDFConversation]);
 
   return (
     <div className='flex'>
       <Nav />
       <div className='flex flex-1 overflow-hidden'>
         {/* Sidebar - PDF Conversations */}
-        {/* <div className=' bg-background'>
-          <div className='p-4 '>
-            <h2 className='font-semibold'>Chat Conversations</h2>
-          </div>
-        </div> */}
         <div className='w-72 border-r overflow-auto h-[calc(100vh-theme(spacing.16))]'>
           <PDFConversationList />
         </div>
@@ -95,13 +114,37 @@ export default function ChatPage() {
             <ChatLayer extractedText={extractedText} />
           </div>
 
-          {/* PDF Viewer */}
+          {/* PDF Viewer and Analysis */}
           <div className='w-[45%] bg-muted/30'>
-            <PDFViewer
-              file={pdfFile}
-              onTextExtracted={handleTextExtracted}
-              onOutlineExtracted={handleOutlineExtracted}
-            />
+            <Tabs defaultValue='analysis' className='h-full flex flex-col'>
+              <div className='border-b px-4'>
+                <TabsList className='w-full justify-start my-3'>
+                  <TabsTrigger value='analysis'>Detailed Analysis</TabsTrigger>
+                  <TabsTrigger value='viewer'>Your pdf</TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value='viewer' className='flex-1'>
+                {isLoading ? (
+                  <div>Loading...</div>
+                ) : error ? (
+                  <div>Error: {error}</div>
+                ) : (
+                  <PDFViewer
+                    file={pdfFile}
+                    onTextExtracted={handleTextExtracted}
+                    onOutlineExtracted={handleOutlineExtracted}
+                  />
+                )}
+              </TabsContent>
+
+              <TabsContent
+                value='analysis'
+                className='flex-1 p-4 overflow-auto'
+              >
+                <AnalysisPanel pdfContent={savedContent || extractedText} />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>

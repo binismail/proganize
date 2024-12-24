@@ -20,34 +20,65 @@ export const pdfService = {
     content: PDFContent,
     userId: string
   ) {
-    return await supabase
-      .from('pdf_extracted_content')
-      .insert({
-        pdf_conversation_id: pdfConversationId,
-        content: content.content,
-        metadata: content.metadata || {},
-        user_id: userId,
-      })
-      .select()
-      .single();
-  },
+    try {
+      const { data, error } = await supabase
+        .from('pdf_extracted_content')
+        .insert({
+          pdf_conversation_id: pdfConversationId,
+          content: content.content,
+          metadata: content.metadata || {},
+          user_id: userId,
+        })
+        .select()
+        .single();
 
-  async getExtractedContent(pdfConversationId: string | undefined) {
-    if (!pdfConversationId) return null;
-    
-    const { data, error } = await supabase
-      .from('pdf_extracted_content')
-      .select('*')
-      .eq('pdf_conversation_id', pdfConversationId)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      if (error) {
+        if (error.code === '23505') { // Unique violation
+          // Try to update instead
+          const { data: updateData, error: updateError } = await supabase
+            .from('pdf_extracted_content')
+            .update({
+              content: content.content,
+              metadata: content.metadata || {},
+            })
+            .eq('pdf_conversation_id', pdfConversationId)
+            .eq('user_id', userId)
+            .select()
+            .single();
 
-    if (error) {
-      console.error('Error fetching PDF content:', error);
+          if (updateError) return null;
+          return updateData;
+        }
+        return null;
+      }
+
+      return data;
+    } catch {
       return null;
     }
+  },
 
-    return data?.[0] || null;
+  async getExtractedContent(pdfConversationId: string | undefined, userId?: string) {
+    if (!pdfConversationId) return null;
+    
+    try {
+      const query = supabase
+        .from('pdf_extracted_content')
+        .select('*')
+        .eq('pdf_conversation_id', pdfConversationId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (userId) {
+        query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error) return null;
+      return data?.[0] || null;
+    } catch {
+      return null;
+    }
   },
 
   formatTitle(title: string): string {

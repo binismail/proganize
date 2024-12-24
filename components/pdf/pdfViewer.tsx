@@ -40,70 +40,69 @@ export default function PDFViewer({
 
   const loadPDF = useCallback(async (url: string) => {
     try {
-      console.log("Fetching PDF from URL:", url);
       const response = await fetch(url);
-      if (!response.ok)
+      if (!response.ok) {
+        const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const blob = await response.blob();
       const pdfUrl = URL.createObjectURL(blob);
       return pdfUrl;
     } catch (error) {
-      console.error("Error fetching PDF:", error);
       throw error;
     }
   }, []);
 
   const extractPDFContent = async (pdfDoc: any, numPages: number) => {
-    const MAX_PAGES_PER_BATCH = 50;
+    const MAX_PAGES_PER_BATCH = 10; 
     let fullText = "";
 
-    console.log(`Starting extraction of ${numPages} pages`);
+    try {
+      for (
+        let batchStart = 1;
+        batchStart <= numPages;
+        batchStart += MAX_PAGES_PER_BATCH
+      ) {
+        const batchEnd = Math.min(batchStart + MAX_PAGES_PER_BATCH - 1, numPages);
 
-    // Process pages in batches
-    for (
-      let batchStart = 1;
-      batchStart <= numPages;
-      batchStart += MAX_PAGES_PER_BATCH
-    ) {
-      const batchEnd = Math.min(batchStart + MAX_PAGES_PER_BATCH - 1, numPages);
-      console.log(`Processing batch: pages ${batchStart} to ${batchEnd}`);
+        const batchPromises = [];
+        for (let i = batchStart; i <= batchEnd; i++) {
+          batchPromises.push(
+            pdfDoc.getPage(i).then(async (page: any) => {
+              try {
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map((item: any) => item.str).join(" ");
+                return pageText;
+              } catch (error) {
+                return "";
+              }
+            })
+          );
+        }
 
-      const batchPromises = [];
-      for (let i = batchStart; i <= batchEnd; i++) {
-        batchPromises.push(
-          pdfDoc.getPage(i).then(async (page: any) => {
-            console.log(`Extracting text from page ${i}`);
-            const textContent = await page.getTextContent();
-            return textContent.items.map((item: any) => item.str).join(" ");
-          })
-        );
+        const batchTexts = await Promise.all(batchPromises);
+        fullText += batchTexts.join("\n\n");
+
+        if (batchEnd < numPages) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       }
 
-      const batchTexts = await Promise.all(batchPromises);
-      fullText += batchTexts.join("\n\n");
-
-      // Small delay between batches to prevent overwhelming the system
-      if (batchEnd < numPages) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      return fullText;
+    } catch (error) {
+      throw error;
     }
-
-    return fullText;
   };
 
   const onDocumentLoadSuccess = useCallback(
     async ({ numPages }: { numPages: number }) => {
-      console.log("PDF loaded successfully, pages:", numPages);
       setNumPages(numPages);
       setLoading(false);
+      setError(null);
 
-      if (!file || !state.currentPDFConversation?.id || !state.user?.id) {
-        console.log("Missing required data for PDF processing");
-        return;
-      }
+      if (!file || !state.currentPDFConversation?.id || !state.user?.id) return;
 
       try {
-        // First save basic metadata to indicate processing has started
         await pdfService.saveExtractedContent(
           state.currentPDFConversation.id,
           {
@@ -116,17 +115,24 @@ export default function PDFViewer({
           state.user.id
         );
 
-        const loadingTask = pdfjs.getDocument(file);
+        const loadingTask = pdfjs.getDocument({
+          url: file,
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/cmaps/',
+          cMapPacked: true,
+        });
+        
         const pdfDoc = await loadingTask.promise;
-
-        // Extract metadata
-        const metadata = await pdfDoc.getMetadata();
+        const metadata = await pdfDoc.getMetadata().catch(() => null);
         const metadataInfo = metadata?.info || {};
 
-        // Extract text content in batches
         const fullText = await extractPDFContent(pdfDoc, numPages);
 
-        // Save complete content
+        if (!fullText || fullText.trim().length === 0) {
+          throw new Error("No text could be extracted from the PDF");
+        }
+
+        onTextExtracted(fullText);
+
         const savedContent = await pdfService.saveExtractedContent(
           state.currentPDFConversation.id,
           {
@@ -140,15 +146,15 @@ export default function PDFViewer({
           state.user.id
         );
 
-        if (savedContent) {
-          console.log("Content saved successfully");
-          onTextExtracted(fullText);
-        } else {
+        if (!savedContent) {
           throw new Error("Failed to save extracted content");
         }
+
       } catch (error) {
-        console.error("Error processing PDF:", error);
-        // Update metadata to indicate error
+        const errorMessage = error instanceof Error ? error.message : "Error processing PDF";
+        setError(errorMessage);
+        setLoading(false);
+        
         await pdfService.saveExtractedContent(
           state.currentPDFConversation.id,
           {
@@ -156,20 +162,21 @@ export default function PDFViewer({
             metadata: {
               pageCount: numPages,
               status: "error",
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: errorMessage,
             },
           },
           state.user.id
-        );
-
-        setError(error instanceof Error ? error.message : "Failed to load PDF");
-        setLoading(false);
+        ).catch(() => {});
       }
     },
-    [file, onTextExtracted, state.currentPDFConversation?.id, state.user?.id]
+    [file, state.currentPDFConversation?.id, state.user?.id, onTextExtracted]
   );
 
-  // Reset state when file changes
+  const onDocumentLoadError = useCallback((error: Error) => {
+    setError("Failed to load PDF. Please try again.");
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     let pdfUrl: string | null = null;
 
@@ -185,9 +192,7 @@ export default function PDFViewer({
 
       try {
         pdfUrl = await loadPDF(file);
-        // The Document component will handle the actual loading
       } catch (error) {
-        console.error("Error loading PDF:", error);
         setError(error instanceof Error ? error.message : "Failed to load PDF");
         setLoading(false);
       }
@@ -195,7 +200,6 @@ export default function PDFViewer({
 
     loadPDFFile();
 
-    // Cleanup
     return () => {
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
@@ -235,7 +239,7 @@ export default function PDFViewer({
   }
 
   return (
-    <div className='flex flex-col h-full'>
+    <div className="relative flex flex-col h-full">
       {/* PDF Controls */}
       <div className='flex items-center justify-between p-4 border-b'>
         <div className='flex items-center space-x-2'>
@@ -270,9 +274,7 @@ export default function PDFViewer({
           <Button
             variant='outline'
             size='icon'
-            onClick={() =>
-              setPageNumber((prev) => Math.min(numPages, prev + 1))
-            }
+            onClick={() => setPageNumber((prev) => Math.min(numPages, prev + 1))}
             disabled={pageNumber >= numPages}
           >
             <ChevronRight className='h-4 w-4' />
@@ -280,42 +282,48 @@ export default function PDFViewer({
         </div>
       </div>
 
-      {/* PDF Viewer */}
-      <div className='flex-1 overflow-auto'>
-        {loading ? (
-          <div className='flex items-center justify-center h-full'>
-            <Loader2 className='w-8 h-8 animate-spin' />
+      <div className="flex-1 overflow-auto">
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="ml-2">Loading PDF...</span>
           </div>
-        ) : error ? (
-          <div className='flex items-center justify-center h-full text-red-500'>
-            {error}
+        )}
+
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-destructive">
+              <FileText className="h-8 w-8 mx-auto mb-2" />
+              <p>{error}</p>
+            </div>
           </div>
-        ) : (
+        )}
+
+        {file && (
           <Document
             file={file}
             onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={(error) => {
-              console.error("Error loading document:", error);
-              setError("Failed to load PDF. Please try again.");
-              setLoading(false);
-            }}
+            onLoadError={onDocumentLoadError}
+            loading={
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="ml-2">Loading PDF...</span>
+              </div>
+            }
           >
-            {Array.from(new Array(numPages), (el, index) => (
-              <Page
-                key={`page_${index + 1}`}
-                pageNumber={index + 1}
-                scale={scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
-            ))}
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              loading={
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              }
+            />
           </Document>
         )}
-      </div>
-
-      {/* Analysis Tools */}
-      <div className='border-t'>
-        <PDFAnalysisTools />
       </div>
     </div>
   );
