@@ -23,6 +23,15 @@ import { PromotionCard } from "@/components/dashboard/PromotionCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreditTopup } from "@/components/shared/creditTopup";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+import { useCarouselAutoplay } from "@/hooks/useCarouselAutoplay";
 
 export default function Dashboard() {
   const { dispatch, state } = useAppContext();
@@ -245,6 +254,44 @@ export default function Dashboard() {
     },
   ];
 
+  // Holiday promotions
+  const HOLIDAY_PROMOTIONS = [
+    {
+      title: "Holiday Special",
+      description: "Get 50% extra credits this holiday season! ",
+      baseCredits: 5000,
+      bonusCredits: 2500,
+      price: 10,
+      isHolidayOffer: true,
+    },
+    {
+      title: "New Year Bundle",
+      description:
+        "Start the year with a bang! Double credits for a limited time. ",
+      baseCredits: 10000,
+      bonusCredits: 10000,
+      price: 20,
+      isHolidayOffer: true,
+    },
+  ];
+
+  // Regular packages
+  const REGULAR_PACKAGES = [
+    {
+      title: "Starter Pack",
+      description: "Perfect for small projects and quick tasks",
+      baseCredits: 5000,
+      price: 10,
+    },
+    {
+      title: "Pro Pack",
+      description: "Most popular choice for professionals",
+      baseCredits: 15000,
+      price: 25,
+      isSpecialOffer: true,
+    },
+  ];
+
   const handlePurchaseCredits = () => {
     // Implement Stripe payment
     router.push("/billing");
@@ -275,16 +322,25 @@ export default function Dashboard() {
               title='Recent Activity'
               description='Your latest documents and conversations'
             />
-            <div className='space-y-6'>
-              <PromotionCard
-                title='Holiday Special'
-                description='Get extra AI words at a special price'
-                price={10}
-                credits={50000}
-                onPurchase={handlePurchaseCredits}
-                isSpecialOffer={true}
-              />
-              <CreditTopup />
+            <div className='space-y-8'>
+              {/* Holiday Promotions */}
+              <div className='space-y-4'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center gap-2'>
+                    <h2 className='text-2xl font-bold'>Holiday Specials</h2>
+                    <Badge variant='destructive' className='animate-pulse'>
+                      Limited Time
+                    </Badge>
+                  </div>
+                </div>
+                <CarouselWrapper items={HOLIDAY_PROMOTIONS} />
+              </div>
+
+              {/* Regular Packages */}
+              {/* <div className='space-y-4'>
+                <h2 className='text-2xl font-bold'>Credit Packages</h2>
+                <CarouselWrapper items={REGULAR_PACKAGES} />
+              </div> */}
             </div>
           </div>
 
@@ -331,5 +387,34 @@ export default function Dashboard() {
         </main>
       </div>
     </div>
+  );
+}
+
+function CarouselWrapper({ items }: { items: any[] }) {
+  return (
+    <Carousel
+      opts={{
+        align: "center",
+        loop: true,
+        skipSnaps: false,
+        startIndex: 0,
+        dragFree: false,
+      }}
+      className='w-full max-w-3xl mx-auto'
+    >
+      <CarouselContent>
+        {items.map((item, index) => (
+          <CarouselItem key={index} className='basis-full'>
+            <div className='p-1'>
+              <PromotionCard {...item} />
+            </div>
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <div className='hidden md:block'>
+        <CarouselPrevious />
+        <CarouselNext />
+      </div>
+    </Carousel>
   );
 }

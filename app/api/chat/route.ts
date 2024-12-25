@@ -58,11 +58,53 @@ export async function POST(req: NextRequest) {
         templateContext ? `
       Template Information:
       ${templateContext}
+      
 
-      Please follow the template structure and guidelines provided above. Ensure your response adheres to the specified format and includes all required sections.
-      ` : ""
-      }
+      Please use the above reference document content to inform and enhance your responses. When relevant, incorporate insights from this document while maintaining the requested document structure.
+`
+        : ""
+    }
 
+Important Guidelines:
+1. Always provide comprehensive, well-structured documentation
+2. Include all necessary sections and details
+3. Use clear headings and organization
+4. Maintain professional tone and clarity
+
+Important Response Format:
+1. For the first message in a conversation:
+   - Start with "### Initial Title: [Brief title based on user's request]"
+   - Then provide your conversational response
+   - Do not generate full document content yet
+
+2. For subsequent messages:
+   - If generating final document, include "### Document Title: [Refined title]"
+   - Then include document content between "### Generated Document" and "### End of Generated Document"
+   - Follow with conversational response
+
+3. Document content must:
+   - Start with "### Generated Document"
+   - End with "### End of Generated Document"
+   - Include clear section headings
+   - Use proper markdown formatting
+   - Be detailed and comprehensive
+   - Follow industry best practices${
+      documentType ? ` for ${documentType} documentation` : ""
+    }
+
+3. Conversational responses should:
+   - Be natural and helpful
+   - Guide users to provide necessary information
+   - Ask for clarification on missing details
+   - Suggest improvements or additional sections
+   - Not contain markdown formatting
+
+Document Structure Guidelines:
+- Always include an introduction/overview section
+- Break content into logical sections with clear headings
+- Include examples where appropriate
+- Add placeholders for missing critical information
+- End with next steps or action items
       ${
         referenceDocument
           ? `
@@ -72,6 +114,7 @@ export async function POST(req: NextRequest) {
       \`\`\`
 
       Please use the above reference document content to inform and enhance your responses. When relevant, incorporate insights from this document while maintaining the requested document structure.
+      
       `
           : ""
       }` : undefined;
