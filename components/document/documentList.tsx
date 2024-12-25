@@ -13,6 +13,7 @@ interface Document {
   title: string;
   updated_at?: string;
   created_at: string;
+  conversation?: [];
   user_id: string;
   content?: string;
 }
@@ -51,6 +52,7 @@ export default function DocumentList() {
     dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
     dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: doc.id });
     dispatch({ type: "SET_GENERATED_DOCUMENT", payload: doc.content || "" });
+    dispatch({ type: "SET_CONVERSATION", payload: doc.conversation || [] });
     dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
   };
 

@@ -27,6 +27,12 @@ interface AnalysisResult {
   quiz?: Array<{ question: string; options: string[]; answer: string }>;
 }
 
+interface QuizQuestion {
+  question: string;
+  options: string[];
+  answer: string;
+}
+
 export default function PDFAnalysisTools() {
   const { state } = useAppContext();
   const [isLoading, setIsLoading] = React.useState(false);
@@ -102,15 +108,16 @@ export default function PDFAnalysisTools() {
           });
           break;
         case 'quiz':
-          result = await pdfService.generateQuiz(content.content);
-          console.log('Quiz result:', result);
-          if (!Array.isArray(result)) {
-            throw new Error('Invalid quiz response format');
-          }
-          setResults(prev => {
-            console.log('Setting quiz:', result);
-            return { ...prev, quiz: result };
-          });
+          const quizQuestions = await pdfService.generateQuiz(content.content);
+          const formattedQuiz: QuizQuestion[] = quizQuestions.map((q: any) => ({
+            question: q.question,
+            options: q.options || [],
+            answer: q.answer
+          }));
+          setResults(prev => ({
+            ...prev,
+            quiz: formattedQuiz
+          }));
           break;
       }
     } catch (error) {

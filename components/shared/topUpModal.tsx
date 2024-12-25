@@ -15,7 +15,7 @@ import { loadStripe } from "@stripe/stripe-js";
 interface TopUpModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
+  userId?: string;
 }
 
 export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {

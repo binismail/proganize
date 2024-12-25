@@ -5,7 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Menu,
   Moon,
@@ -16,6 +15,8 @@ import {
   Book,
   ChartBar,
   Settings,
+  LogOut,
+  LogIn,
 } from "lucide-react";
 import Image from "next/image";
 import logoBlack from "@/asset/proganize-dark-side.svg";
@@ -23,7 +24,6 @@ import logoWhite from "@/asset/proganize-light-side.svg";
 import { useAppContext } from "@/app/context/appContext";
 import { signIn, signOut } from "@/utils/supabaseOperations";
 import { supabase } from "@/utils/supabase/instance";
-import { UserProfilePopup } from "../shared/userProfile";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import { cn } from "@/lib/utils";
 import { CreditDisplay } from "../shared/creditDisplay";
@@ -35,6 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { Icons } from "../ui/icons";
 
 export default function Nav() {
   const [mounted, setMounted] = useState(false);
@@ -137,95 +138,113 @@ export default function Nav() {
         })}
       </div>
 
-      <div className='p-4 border-t border-gray-200 dark:border-gray-800'>
-        <Button
-          variant='ghost'
-          size='icon'
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className='w-full'
-        >
-          {theme === "dark" ? (
-            <Sun className='h-4 w-4' />
-          ) : (
-            <Moon className='h-4 w-4' />
-          )}
-        </Button>
+      <div className='flex flex-col h-full justify-between'>
+        <div className='flex-1'></div>
 
-        <div className='flex items-center gap-4'>
-          <CreditDisplay variant='minimal' />
-          {user && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant='ghost'
-                  className='relative h-8 w-8 rounded-full'
-                >
-                  <Avatar className='h-8 w-8'>
-                    <AvatarImage
-                      src={user.user_metadata.avatar_url}
-                      alt={user.user_metadata.full_name}
-                    />
-                    <AvatarFallback>
-                      {user.user_metadata.full_name?.charAt(0) || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className='w-56' align='end' forceMount>
-                <DropdownMenuLabel className='font-normal'>
-                  <div className='flex flex-col space-y-1'>
-                    <p className='text-sm font-medium leading-none'>
-                      {user.user_metadata.full_name}
-                    </p>
-                    <p className='text-xs leading-none text-muted-foreground'>
-                      {user.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => signOut()}>
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        {user ? (
-          <div className='mt-4'>
+        {/* Footer section */}
+        <div className='border-t border-border py-4'>
+          {/* Theme and Credits Row */}
+          <div
+            className={cn(
+              "flex items-center gap-2 px-2 mb-4",
+              isCollapsed ? "flex-col" : "justify-between"
+            )}
+          >
             <Button
               variant='ghost'
-              className={cn("w-full", isCollapsed ? "p-2" : "")}
-              onClick={() => setIsPopoverOpen(true)}
+              size='icon'
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className='h-8 w-8 shrink-0'
             >
-              <Avatar className='h-6 w-6'>
-                <AvatarImage src={user.user_metadata?.avatar_url} />
-                <AvatarFallback>
-                  {user.email?.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              {!isCollapsed && (
-                <span className='ml-2 truncate'>{user.email}</span>
+              {theme === "dark" ? (
+                <Sun className='h-4 w-4' />
+              ) : (
+                <Moon className='h-4 w-4' />
               )}
             </Button>
+            <div
+              className={cn(
+                "flex items-center",
+                isCollapsed && "w-full justify-center"
+              )}
+            >
+              <CreditDisplay variant='minimal' />
+            </div>
           </div>
-        ) : (
-          <Button
-            variant='default'
-            className={cn("w-full mt-4", isCollapsed ? "p-2" : "")}
-            onClick={handleGoogleAuth}
-          >
-            {isCollapsed ? "Sign In" : "Sign in with Google"}
-          </Button>
-        )}
-      </div>
 
-      {isPopoverOpen && (
-        <UserProfilePopup
-          isOpen={isPopoverOpen}
-          onClose={() => setIsPopoverOpen(false)}
-        />
-      )}
+          {/* User Section */}
+          {user ? (
+            <div className='px-2'>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant='ghost'
+                    className={cn(
+                      "w-full flex items-center gap-2",
+                      isCollapsed ? "justify-center px-0" : "justify-start px-2"
+                    )}
+                  >
+                    <Avatar className='h-6 w-6 shrink-0'>
+                      <AvatarImage
+                        src={user.user_metadata.avatar_url}
+                        alt={user.user_metadata.full_name}
+                      />
+                      <AvatarFallback>
+                        {user.user_metadata.full_name?.charAt(0) ||
+                          user.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    {!isCollapsed && (
+                      <div className='flex flex-col items-start text-left overflow-hidden'>
+                        <span className='text-sm font-medium truncate w-full'>
+                          {user.user_metadata.full_name}
+                        </span>
+                        <span className='text-xs text-muted-foreground truncate w-full'>
+                          {user.email}
+                        </span>
+                      </div>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className='w-56' align='end' forceMount>
+                  <DropdownMenuLabel className='font-normal'>
+                    <div className='flex flex-col space-y-1'>
+                      <p className='text-sm font-medium leading-none'>
+                        {user.user_metadata.full_name}
+                      </p>
+                      <p className='text-xs leading-none text-muted-foreground'>
+                        {user.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => signOut()}>
+                    <LogOut className='h-4 w-4 mr-2' />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <div className='px-2'>
+              <Button
+                variant='default'
+                className={cn("w-full", isCollapsed ? "px-0" : "")}
+                onClick={handleGoogleAuth}
+              >
+                {isCollapsed ? (
+                  <LogIn className='h-4 w-4' />
+                ) : (
+                  <div className='flex items-center gap-2'>
+                    <Icons.google className='mr-2 h-4 w-4' />
+                    Sign in with Google
+                  </div>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
     </nav>
   );
 }

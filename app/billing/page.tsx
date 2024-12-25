@@ -217,7 +217,7 @@ function BillingPageContent() {
             ? parseInt(creditAmountStr, 10)
             : 0;
           const amountPaid = creditAmount * 0.002;
-          sendEventToMixpanel("topup", { amount: amountPaid }, user);
+          sendEventToMixpanel("topup", user, { amount: amountPaid });
         }
       }
 

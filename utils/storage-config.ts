@@ -1,19 +1,19 @@
-const { supabase } = require('./supabase/instance');
-const { STORAGE_CONSTANTS } = require('./constants');
+import { supabase } from './supabase/instance';
+import { STORAGE_CONSTANTS } from './constants';
 
-async function configureBucketCORS() {
+export async function configureStorageBucketCORS() {
   try {
     const { data, error } = await supabase.storage.updateBucket(STORAGE_CONSTANTS.BUCKET_NAME, {
       public: false,
       allowedMimeTypes: ['application/pdf'],
       fileSizeLimit: STORAGE_CONSTANTS.MAX_FILE_SIZE,
-      cors_rules: [{
-        allowed_origins: ['*'],
-        allowed_methods: ['GET', 'HEAD'],
-        allowed_headers: ['*'],
-        exposed_headers: [],
-        max_age_seconds: 3600
-      }]
+      // cors_rules: [{
+      //   allowed_origins: ['*'],
+      //   allowed_methods: ['GET', 'HEAD'],
+      //   allowed_headers: ['*'],
+      //   exposed_headers: [],
+      //   max_age_seconds: 3600
+      // }]s
     });
 
     if (error) {
@@ -27,5 +27,3 @@ async function configureBucketCORS() {
     return { success: false, error };
   }
 }
-
-module.exports = { configureBucketCORS };

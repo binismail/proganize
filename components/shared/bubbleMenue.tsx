@@ -1,80 +1,59 @@
-import React from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bold,
   Italic,
   Underline,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Heading1,
-  Heading2,
-  Sparkles,
-  Type,
+  Wand2,
 } from "lucide-react";
 
 interface BubbleMenuProps {
-  position: { top: number; left: number };
-  onFormatText: (command: string, value?: string) => void;
-  onAlignText: (alignment: string) => void;
-  onHeadingChange: (heading: string) => void;
-  onEnhanceWithAI: () => void;
+  onBold: () => void;
+  onItalic: () => void;
+  onUnderline: () => void;
+  onAiEdit: () => void;
 }
 
-export const BubbleMenu: React.FC<BubbleMenuProps> = ({
-  position,
-  onFormatText,
-  onAlignText,
-  onHeadingChange,
-  onEnhanceWithAI,
-}) => {
+export function BubbleMenu({
+  onBold,
+  onItalic,
+  onUnderline,
+  onAiEdit,
+}: BubbleMenuProps) {
   return (
-    <div
-      className='absolute bg-background border rounded-full shadow-md p-1.5 flex items-center space-x-1'
-      style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        transform: "translateX(-50%)",
-      }}
-    >
-      <Button variant='ghost' size='icon' onClick={() => onFormatText("bold")}>
-        <Bold className='h-4 w-4' />
+    <div className="flex items-center gap-1 rounded-lg border bg-background p-1 shadow-lg">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={onBold}
+      >
+        <Bold className="h-4 w-4" />
       </Button>
       <Button
-        variant='ghost'
-        size='icon'
-        onClick={() => onFormatText("italic")}
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={onItalic}
       >
-        <Italic className='h-4 w-4' />
+        <Italic className="h-4 w-4" />
       </Button>
       <Button
-        variant='ghost'
-        size='icon'
-        onClick={() => onFormatText("underline")}
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={onUnderline}
       >
-        <Underline className='h-4 w-4' />
+        <Underline className="h-4 w-4" />
       </Button>
-      <Button variant='ghost' size='icon' onClick={() => onAlignText("left")}>
-        <AlignLeft className='h-4 w-4' />
+      <div className="h-4 w-[1px] bg-border" />
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={onAiEdit}
+      >
+        <Wand2 className="h-4 w-4" />
       </Button>
-      <Button variant='ghost' size='icon' onClick={() => onAlignText("center")}>
-        <AlignCenter className='h-4 w-4' />
-      </Button>
-      <Button variant='ghost' size='icon' onClick={() => onAlignText("right")}>
-        <AlignRight className='h-4 w-4' />
-      </Button>
-      <Button variant='ghost' size='icon' onClick={() => onHeadingChange("p")}>
-        <Type className='h-4 w-4' />
-      </Button>
-      <Button variant='ghost' size='icon' onClick={() => onHeadingChange("h1")}>
-        <Heading1 className='h-4 w-4' />
-      </Button>
-      <Button variant='ghost' size='icon' onClick={() => onHeadingChange("h2")}>
-        <Heading2 className='h-4 w-4' />
-      </Button>
-      {/* <Button variant='ghost' size='icon' onClick={onEnhanceWithAI}>
-        <Sparkles className='h-4 w-4' />
-      </Button> */}
     </div>
   );
-};
+}

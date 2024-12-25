@@ -9,6 +9,7 @@ import { supabase } from "@/utils/supabase/instance";
 import {
   checkAndInitializeUser,
   checkSubscriptionStatus,
+  getToken,
   sFetchDocuments,
 } from "@/utils/supabaseOperations";
 import { PlusIcon, Sparkles } from "lucide-react";
@@ -99,23 +100,27 @@ export default function WritePage() {
       }
 
       dispatch({ type: "SET_DOCUMENTS", payload: allDocs });
+      dispatch({ type: "SET_IS_LOADING", payload: false });
     } catch (error) {
       console.error("Error fetching documents:", error);
     }
   };
 
   const handleTemplateSelect = async (template: any, values: any) => {
-    // Create a new document with the template
     try {
-      const prompt = generatePromptFromTemplate(template, values);
       dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
       dispatch({ type: "SET_IS_GENERATING", payload: true });
+      dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
+
+      const prompt = generatePromptFromTemplate(template, values);
+      const token = await getToken();
 
       // Call your AI endpoint here to generate content
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           prompt,
@@ -127,12 +132,63 @@ export default function WritePage() {
       if (!response.ok) throw new Error("Failed to generate content");
 
       const data = await response.json();
-      dispatch({ type: "SET_GENERATED_DOCUMENT", payload: data.content });
+      console.log("Generated content:", data.content);
+
+      // Extract title and content
+      const documentContent = extractDocumentContent(data.content);
+      const title = extractTitle(data.content) || template.name;
+
+      // Save the new document
+      if (documentContent) {
+        const newDocument = {
+          user_id: user?.id,
+          title: title,
+          content: documentContent,
+          conversation: [{ role: "system", content: data.content }],
+        };
+
+        const { data: savedDoc, error } = await supabase
+          .from("documents")
+          .insert(newDocument)
+          .select();
+
+        if (error) {
+          console.error("Error saving document:", error);
+        } else if (savedDoc && savedDoc.length > 0) {
+          console.log("Document saved successfully:", savedDoc[0]);
+          dispatch({ type: "SET_SELECTED_DOCUMENT", payload: savedDoc[0] });
+          dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
+          dispatch({
+            type: "SET_CURRENT_DOCUMENT_ID",
+            payload: savedDoc[0].id,
+          });
+          await fetchDocuments(user?.id || "");
+          dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
+        }
+
+        // Update the editor with the generated content
+        dispatch({ type: "SET_GENERATED_DOCUMENT", payload: documentContent });
+      }
+
       dispatch({ type: "SET_IS_GENERATING", payload: false });
     } catch (error) {
       console.error("Error generating content:", error);
       dispatch({ type: "SET_IS_GENERATING", payload: false });
     }
+  };
+
+  const extractDocumentContent = (text: string): string | null => {
+    const documentRegex =
+      /### Generated Document([\s\S]*?)### End of Generated Document/;
+    const match = text.match(documentRegex);
+    return match ? match[1].trim() : text; // Return the full text if no markers found
+  };
+
+  const extractTitle = (text: string): string => {
+    // Try to find a title in the format "### Document Title: ..." or "### Initial Title: ..."
+    const titleRegex = /### (?:Document|Initial) Title:(.*?)(?=\n|$)/;
+    const match = text.match(titleRegex);
+    return match ? match[1].trim() : "";
   };
 
   const generatePromptFromTemplate = (template: any, values: any) => {

@@ -3,13 +3,13 @@
 import { useAppContext } from "../context/appContext";
 import PDFConversationList from "@/components/pdf/pdfConversationList";
 import ChatLayer from "@/components/chat/chatLayer";
-import PDFViewer from "@/components/pdf/pdfViewer";
+import DynamicPDFViewer from "@/components/pdf/dynamicPdfViewer";
 import { useState, useCallback, useEffect } from "react";
 import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { STORAGE_CONSTANTS } from "@/utils/constants";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AnalysisPanel } from "@/components/pdf/analysisPanel"; // Import pdfService
+import { AnalysisPanel } from "@/components/pdf/analysisPanel"; 
 import { pdfService } from "@/utils/services/pdfService";
 
 export default function ChatPage() {
@@ -18,6 +18,7 @@ export default function ChatPage() {
   const [outline, setOutline] = useState<any[]>([]);
   const [pdfFile, setPdfFile] = useState<string | null>(null);
   const [savedContent, setSavedContent] = useState<string>("");
+  const [activeTab, setActiveTab] = useState("chat");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +131,7 @@ export default function ChatPage() {
                 ) : error ? (
                   <div>Error: {error}</div>
                 ) : (
-                  <PDFViewer
+                  <DynamicPDFViewer
                     file={pdfFile}
                     onTextExtracted={handleTextExtracted}
                     onOutlineExtracted={handleOutlineExtracted}

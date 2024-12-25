@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { checkAndInitializeUser } from "@/utils/supabaseOperations";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
+import { supabase } from "@/utils/supabase/instance";
+
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -10,24 +10,21 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.split(" ")[1] || "";  
+    if (!authHeader) {
+      return new Response(
+        "Authorization header missing",
+        { status: 401 },
       );
     }
 
-    // Check user credits
-    const { credits } = await checkAndInitializeUser(user.id, user);
-    if (credits.remaining_credits <= 0) {
-      return NextResponse.json(
-        { error: "No credits remaining" },
-        { status: 402 }
+    // Verify the token with Supabase
+    const { data: user, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return new Response(
+        "Unauthorized, invalid token",
+        { status: 401 },
       );
     }
 
@@ -39,7 +36,20 @@ export async function POST(req: Request) {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        { role: "system", content: systemMessage },
+        { 
+          role: "system", 
+          content: `${systemMessage}
+
+Important Response Format:
+1. Start with "### Initial Title: [Brief title based on content]"
+2. Then include document content between "### Generated Document" and "### End of Generated Document"
+3. Document content must:
+   - Use proper markdown formatting
+   - Include clear section headings
+   - Be detailed and comprehensive
+   - Follow template structure when provided
+4. End with any additional notes or suggestions`
+        },
         { role: "user", content: prompt }
       ],
       temperature: 0.7,
@@ -61,7 +71,9 @@ export async function POST(req: Request) {
   }
 }
 
-function getSystemMessage(template: string): string {
+function getSystemMessage(template: string | null): string {
+  if (!template) return "You are a professional content creator. Write high-quality, engaging content that serves the user's purpose.";
+
   switch (template) {
     case "linkedin-post":
       return `You are an expert LinkedIn content creator. Your task is to write engaging, professional LinkedIn posts that drive engagement. 
@@ -113,7 +125,10 @@ function getSystemMessage(template: string): string {
   }
 }
 
-function formatContent(content: string, template: string): string {
+function formatContent(content: string | null, template: string | null): string {
+  if (!content) return "";
+  if (!template) return content;
+  
   switch (template) {
     case "linkedin-post":
     case "tweet-thread":

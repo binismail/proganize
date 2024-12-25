@@ -14,6 +14,9 @@ import { getPreviouslyCachedImageOrNull } from "next/dist/server/image-optimizer
 interface Document {
   id: string;
   title: string;
+  user_id: string;
+  content?: string;
+  conversation?: [];
   updated_at?: string;
   created_at: string;
 }
@@ -23,8 +26,13 @@ interface ConversationItem {
   content: string;
 }
 
+interface contentItem {
+  title: string;
+  template: string;
+}
+
 interface AppState {
-  user: User | null;
+  user: any;
   productIdea: string;
   documents: Document[];
   generatedDocument: string;
@@ -54,6 +62,8 @@ interface AppState {
   showTopup: boolean;
   activeTab: string;
   currentPDFConversation: PDFConversation | null;
+  currentDocument: contentItem | null;
+  currentStudyMaterial: any | null;
 }
 
 const initialState: AppState = {
@@ -84,6 +94,8 @@ const initialState: AppState = {
   showTopup: false,
   activeTab: "writer",
   currentPDFConversation: null,
+  currentDocument: null,
+  currentStudyMaterial: null,
 };
 
 // Define actions
@@ -114,8 +126,9 @@ type Action =
   | { type: "SET_SHOW_UPGRADE_MODAL"; payload: boolean }
   | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean }
   | { type: "SET_ACTIVE_TAB"; payload: string }
-  | { type: "SET_CURRENT_PDF_CONVERSATION"; payload: PDFConversation | null };
-
+  | { type: "SET_CURRENT_PDF_CONVERSATION"; payload: PDFConversation | null }
+  | { type: "SET_CURRENT_DOCUMENT"; payload: contentItem | null }
+  | { type: "SET_CURRENT_STUDY_MATERIAL"; payload: any };
 const AppReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
     case "SET_USER":
@@ -186,6 +199,16 @@ const AppReducer = (state: AppState, action: Action): AppState => {
       return {
         ...state,
         currentPDFConversation: action.payload,
+      };
+    case "SET_CURRENT_DOCUMENT":
+      return {
+        ...state,
+        currentDocument: action.payload,
+      };
+    case "SET_CURRENT_STUDY_MATERIAL":
+      return {
+        ...state,
+        currentStudyMaterial: action.payload,
       };
     default:
       return state;
