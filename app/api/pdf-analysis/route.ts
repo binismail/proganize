@@ -105,8 +105,8 @@ export async function POST(req: NextRequest) {
     }
     const token = authHeader.split(" ")[1];
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
+    const { data: user, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
       return new Response("Unauthorized, invalid token", { status: 401 });
     }
 
@@ -130,6 +130,8 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    console.log(user);
 
     // Check word credits before processing
     const remainingCredits = await checkWordCredits(user.user.id);
