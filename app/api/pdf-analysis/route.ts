@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { supabase } from "@/utils/supabase/instance";
 import { openAIRateLimiter } from "@/utils/rateLimiter";
+import { calculateWordCredits } from "@/utils/wordCounter";
+import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -129,6 +131,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Check word credits before processing
+    const remainingCredits = await checkWordCredits(user.user.id);
+    
+    // Estimate token usage
+    const estimatedTokens = Math.ceil(content.length / 4);
+    const estimatedResponseTokens = 1000; // Typical response length
+    const estimatedTotalCredits = calculateWordCredits(estimatedTokens, estimatedResponseTokens);
+
+    if (remainingCredits < estimatedTotalCredits) {
+      return new Response(
+        JSON.stringify({ error: "Insufficient word credits" }),
+        { status: 402 }
+      );
+    }
+
     // Get appropriate chunk size for analysis type
     const chunkSize = CHUNK_SIZES[type as keyof typeof CHUNK_SIZES] || 2000;
     const chunks = splitIntoChunks(content, chunkSize);
@@ -215,7 +232,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return new Response(JSON.stringify(finalResult), {
+    // Calculate actual token usage and deduct credits
+    const actualTokens = Math.ceil(content.length / 4);
+    const actualResponseTokens = chunkResults.reduce((acc, result) => acc + result.length, 0);
+    const actualCredits = calculateWordCredits(actualTokens, actualResponseTokens);
+
+    await deductWordCredits(user.user.id, actualCredits);
+
+    return new Response(JSON.stringify({
+      ...finalResult,
+      remainingCredits: remainingCredits - actualCredits
+    }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: any) {

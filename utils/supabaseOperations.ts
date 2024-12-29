@@ -1,9 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { SupabaseClient, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase/instance";
-import { Document } from "@/lib/types/type";
-import { data } from "autoprefixer";
 import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
 import createUserMixpanel from "@/lib/createUserMixpanel";
+import { Dispatch } from "react";
 
 // Document operations
 export const sFetchDocuments = async (id: string) => {
@@ -175,18 +174,23 @@ export async function checkSubscriptionStatus(
   userId: string,
 ): Promise<"active" | "inactive"> {
   try {
-    const { data, error } = await supabase
+    // First check if user has any subscription
+    const { data: subscription, error } = await supabase
       .from("subscriptions")
       .select("status")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single to handle no rows gracefully
 
-    if (error) throw error;
+    if (error && error.code !== "PGRST116") {
+      console.error("Error checking subscription:", error);
+      throw error;
+    }
 
-    return data?.status === "active" ? "active" : "inactive";
+    // If no subscription found or status is not active, return inactive
+    return subscription?.status === "active" ? "active" : "inactive";
   } catch (error) {
     console.error("Error checking subscription status:", error);
-    return "inactive"; // Default to inactive if there's an error
+    return "inactive"; // Default to inactive on error
   }
 }
 
@@ -247,6 +251,87 @@ export async function checkAndUpdateConversationCount(
   } catch (error) {
     console.error("Error checking/updating conversation count:", error);
     return { canProceed: false, resetTime: tomorrowStart };
+  }
+}
+
+export async function initializeUser(
+  supabase: SupabaseClient,
+  user: User,
+  dispatch: Dispatch<any>
+) {
+  try {
+    console.log("Starting user initialization for:", user.id);
+
+    // Check if user has word credits
+    const { data: existingCredits, error: creditsCheckError } = await supabase
+      .from("word_credits")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    if (creditsCheckError && creditsCheckError.code !== 'PGRST116') {
+      console.error("Error checking word credits:", creditsCheckError);
+      throw creditsCheckError;
+    }
+
+    console.log("Existing credits check:", existingCredits);
+
+    if (!existingCredits) {
+      console.log("Initializing new user credits");
+      
+      // Initialize word credits
+      const { error: creditsError } = await supabase
+        .from("word_credits")
+        .insert([
+          {
+            user_id: user.id,
+            remaining_credits: 1000,
+            total_words_generated: 0,
+          },
+        ]);
+
+      if (creditsError) {
+        console.error("Error creating word credits:", creditsError);
+        throw creditsError;
+      }
+
+      console.log("Word credits created successfully");
+
+      // Log credit transaction
+      const { error: transactionError } = await supabase
+        .from("credit_transactions")
+        .insert([
+          {
+            user_id: user.id,
+            amount: 1000,
+            type: "welcome_bonus",
+            description: "Welcome bonus credits",
+          },
+        ]);
+
+      if (transactionError) {
+        console.error("Error creating credit transaction:", transactionError);
+        throw transactionError;
+      }
+
+      console.log("Credit transaction created successfully");
+
+      // Send event to analytics
+      sendEventToMixpanel("user_signup", {
+        userId: user.id,
+        email: user.email,
+        welcomeCredits: 1000,
+      });
+
+      console.log("Analytics event sent");
+      return true; // New user
+    }
+
+    console.log("Existing user detected");
+    return false; // Existing user
+  } catch (error) {
+    console.error("Error in initializeUser:", error);
+    throw error;
   }
 }
 

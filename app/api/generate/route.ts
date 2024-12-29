@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { checkAndInitializeUser } from "@/utils/supabaseOperations";
 import { supabase } from "@/utils/supabase/instance";
-
+import { calculateWordCredits } from "@/utils/wordCounter";
+import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -14,8 +15,8 @@ export async function POST(req: Request) {
     const token = authHeader?.split(" ")[1] || "";  
     if (!authHeader) {
       return new Response(
-        "Authorization header missing",
-        { status: 401 },
+        JSON.stringify({ error: "Authorization header missing" }),
+        { status: 401 }
       );
     }
 
@@ -23,15 +24,33 @@ export async function POST(req: Request) {
     const { data: user, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       return new Response(
-        "Unauthorized, invalid token",
-        { status: 401 },
+        JSON.stringify({ error: "Unauthorized, invalid token" }),
+        { status: 401 }
       );
     }
 
     const { prompt, template, values } = await req.json();
 
+    // Check word credits before processing
+    const remainingCredits = await checkWordCredits(user.user.id);
+    
     // Get the system message based on the template
     const systemMessage = getSystemMessage(template);
+
+    // Estimate token usage
+    const estimatedTokens = Math.ceil((systemMessage.length + prompt.length) / 4);
+    const estimatedResponseTokens = 2000; // max_tokens parameter
+    const estimatedTotalCredits = calculateWordCredits(estimatedTokens, estimatedResponseTokens);
+
+    if (remainingCredits < estimatedTotalCredits) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Insufficient word credits. Please upgrade your plan to continue.",
+          type: "INSUFFICIENT_CREDITS"
+        }),
+        { status: 402 }
+      );
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
@@ -56,16 +75,32 @@ Important Response Format:
       max_tokens: 2000,
     });
 
-    const content = completion.choices[0].message.content;
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error("No response from OpenAI");
+    }
+
+    // Calculate actual token usage and deduct credits
+    const actualCredits = calculateWordCredits(
+      completion.usage?.prompt_tokens || estimatedTokens,
+      completion.usage?.completion_tokens || estimatedResponseTokens
+    );
+
+    await deductWordCredits(user.user.id, actualCredits);
 
     // Format the content based on the template
-    const formattedContent = formatContent(content, template);
+    const formattedContent = formatContent(completion.choices[0].message.content, template);
 
-    return NextResponse.json({ content: formattedContent });
-  } catch (error) {
+    return NextResponse.json({ 
+      content: formattedContent,
+      remainingCredits: remainingCredits - actualCredits
+    });
+  } catch (error: any) {
     console.error("Error generating content:", error);
-    return NextResponse.json(
-      { error: "Failed to generate content" },
+    return new Response(
+      JSON.stringify({ 
+        error: error.message || "Failed to generate content",
+        type: error.type || "GENERATION_ERROR"
+      }),
       { status: 500 }
     );
   }
@@ -99,29 +134,17 @@ function getSystemMessage(template: string | null): string {
       - SEO-optimized headings and structure
       - Natural keyword integration
       - Engaging introduction
-      - Comprehensive coverage of the topic
-      - Clear takeaways and next steps`;
-
-    case "facebook-ad":
-      return `You are a Facebook advertising expert. Your task is to write compelling ad copy that drives conversions.
-      Focus on:
-      - Attention-grabbing headlines
-      - Clear value proposition
-      - Emotional triggers
-      - Social proof
-      - Strong call-to-actions`;
-
-    case "video-script":
-      return `You are a video script expert. Your task is to write engaging scripts that keep viewers watching.
-      Focus on:
-      - Hook in first 5 seconds
-      - Conversational tone
-      - Clear structure and flow
-      - Visual descriptions
-      - Engaging closing`;
+      - Comprehensive coverage
+      - Clear takeaways`;
 
     default:
-      return "You are a professional content creator. Write high-quality, engaging content that serves the user's purpose.";
+      return `You are a professional content creator. Write high-quality, engaging content that serves the user's purpose.
+      Focus on:
+      - Clear and concise writing
+      - Proper structure and formatting
+      - Engaging and valuable content
+      - Professional tone
+      - Actionable insights`;
   }
 }
 

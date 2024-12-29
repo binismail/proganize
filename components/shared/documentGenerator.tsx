@@ -93,140 +93,115 @@ export default function DocumentGenerator({
     try {
       dispatch({ type: "SET_IS_GENERATING", payload: true });
 
-      // Create user message
-      const userMessage: ChatMessage = {
-        role: "user",
-        content: inputValue.trim(),
-      };
-
-      // Add user message to conversation immediately
-      const updatedConversation = [...conversation, userMessage];
-      dispatch({
-        type: "SET_CONVERSATION",
-        payload: updatedConversation,
-      });
-
-      // Clear input after sending
-      setInputValue("");
-
       const token = await getToken();
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
 
-      // Ensure all messages in conversation have role and content
-      const formattedConversation = updatedConversation
-        .map((msg) => ({
-          role: msg.role || "user",
-          content: msg.content || "",
-        }))
-        .filter((msg) => msg.content.trim() !== "");
-
-      const response = await fetch("/api/chat", {
+      const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          conversation: formattedConversation,
-          documentType,
-          template,
-          referenceDocument: documentInfo || selectedDocument?.content || null,
+          prompt: inputValue,
+          template: template,
+          values: {
+            productIdea,
+            documentInfo,
+          },
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const error = await response.json();
+        if (response.status === 402) {
+          toast({
+            title: "Insufficient Credits",
+            description: "Please upgrade your plan to continue generating content.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(error.message || "Failed to generate content");
       }
 
-      const { content } = await response.json();
+      const data = await response.json();
 
-      if (!content) {
-        throw new Error("No response from API");
+      // Update word credits in global state
+      if (data.remainingCredits !== undefined) {
+        dispatch({
+          type: "SET_WORD_CREDITS",
+          payload: {
+            remaining_credits: data.remainingCredits,
+            total_words_generated: state.wordCredits?.total_words_generated || 0,
+          },
+        });
       }
 
-      // Add AI response to conversation
-      const aiMessage: ChatMessage = {
-        role: "assistant",
-        content: content,
-      };
+      // Extract title from the response
+      const titleMatch = data.content.match(/### Initial Title: (.+)/);
+      const title = titleMatch ? titleMatch[1].trim() : "Untitled Document";
 
-      const finalConversation = [...updatedConversation, aiMessage];
-      dispatch({
-        type: "SET_CONVERSATION",
-        payload: finalConversation,
+      // Extract document content
+      const contentMatch = data.content.match(/### Generated Document\n([\s\S]*?)### End of Generated Document/);
+      const documentContent = contentMatch ? contentMatch[1].trim() : data.content;
+
+      // Create new document
+      const { data: document, error: documentError } = await supabase
+        .from("documents")
+        .insert({
+          user_id: user.id,
+          title: title,
+          content: documentContent,
+          conversation: [
+            {
+              role: "user",
+              content: inputValue,
+            },
+            {
+              role: "assistant",
+              content: documentContent,
+            },
+          ],
+        })
+        .select()
+        .single();
+
+      if (documentError) throw documentError;
+
+      // Update UI state
+      dispatch({ type: "SET_DOCUMENTS", payload: [...state.documents, document] });
+      dispatch({ type: "SET_SELECTED_DOCUMENT", payload: document });
+      dispatch({ type: "SET_CONVERSATION", payload: document.conversation });
+      dispatch({ type: "SET_GENERATED_DOCUMENT", payload: document.content });
+      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: true });
+      dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: document.id });
+      dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: false });
+      dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: true });
+
+      // Clear input and file state
+      setInputValue("");
+      setUploadedFiles([]);
+      setDocumentInfo("");
+
+      // Track event
+      sendEventToMixpanel("Document Generated", {
+        template: template || "custom",
+        documentType: documentType || "general",
       });
 
-      // Check if this is the first message (initial title)
-      const initialTitle = extractInitialTitle(content);
-      if (initialTitle && !selectedDocument) {
-        // Create a new document with initial title
-        const newDoc = await saveNewDocument(
-          finalConversation,
-          "", // No content yet
-          initialTitle
-        );
-        if (newDoc) {
-          // Set selected document without conversation to match type
-          const { conversation: _, ...docWithoutConversation } = newDoc;
-          const docForState = {
-            ...docWithoutConversation,
-            created_at:
-              docWithoutConversation.created_at || new Date().toISOString(),
-            updated_at:
-              docWithoutConversation.updated_at || new Date().toISOString(),
-          };
-          dispatch({
-            type: "SET_SELECTED_DOCUMENT",
-            payload: docForState,
-          });
-        } else {
-          throw new Error("Failed to create new document");
-        }
-      }
-      // Check for generated document content
-      else if (selectedDocument) {
-        const documentContent = extractDocumentContent(content);
-        if (documentContent) {
-          dispatch({
-            type: "SET_GENERATED_DOCUMENT",
-            payload: documentContent,
-          });
-
-          const finalTitle =
-            extractFinalTitle(content) || selectedDocument.title;
-          await updateDocument(finalConversation, documentContent, finalTitle);
-
-          dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
-          await updateWordCredits(content);
-        }
-      }
-
-      dispatch({ type: "SET_IS_GENERATING", payload: false });
     } catch (error) {
       console.error("Error generating document:", error);
-      handleError(error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate document",
+        variant: "destructive",
+      });
+    } finally {
+      dispatch({ type: "SET_IS_GENERATING", payload: false });
     }
-  };
-
-  const extractInitialTitle = (text: string | undefined): string => {
-    if (!text) return "";
-    const titleRegex = /### Initial Title:(.*?)(?=\n|$)/;
-    const match = text.match(titleRegex);
-    return match ? match[1].trim() : "";
-  };
-
-  const extractDocumentContent = (text: string | undefined): string | null => {
-    if (!text) return null;
-    const documentRegex =
-      /### Generated Document([\s\S]*?)### End of Generated Document/;
-    const match = text.match(documentRegex);
-    return match ? match[1].trim() : null;
-  };
-
-  const extractFinalTitle = (text: string | undefined): string => {
-    if (!text) return "";
-    const titleRegex = /### Document Title:(.*?)(?=\n|$)/;
-    const match = text.match(titleRegex);
-    return match ? match[1].replace(/["']/g, "").trim() : "";
   };
 
   const handleFileUpload = async (
@@ -273,260 +248,17 @@ export default function DocumentGenerator({
     }
   };
 
-  const handleError = (error: unknown): void => {
-    console.error("Error generating document:", error);
-    dispatch({ type: "SET_IS_GENERATING", payload: false });
-
-    toast({
-      title: "Error",
-      description:
-        error instanceof Error ? error.message : "Failed to generate response",
-      variant: "destructive",
-    });
-
-    if (
-      error instanceof Error &&
-      error.message === "Insufficient word credits"
-    ) {
-      setInsufficientCredits(true);
-    }
-  };
-
-  const handleFirstMessage = async (
-    reply: string | undefined,
-    updatedConversation: ChatMessage[]
-  ): Promise<void> => {
-    if (!reply) {
-      dispatch({ type: "SET_IS_GENERATING", payload: false });
-      return;
-    }
-
-    const initialTitle = extractInitialTitle(reply);
-    const cleanedReply = reply
-      .replace(/### Initial Title:.*?(?=\n|$)/, "")
-      .trim();
-
-    if (initialTitle && !selectedDocument) {
-      await saveNewDocument(updatedConversation, "", initialTitle);
-      sendEventToMixpanel("document_generated", user);
-    }
-
-    const aiResponse: ChatMessage = {
-      role: "assistant",
-      content: cleanedReply,
-    };
-    const finalConversation = [...updatedConversation, aiResponse];
-    dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
-    dispatch({ type: "SET_IS_GENERATING", payload: false });
-  };
-
-  const handleSubsequentMessage = async (
-    reply: string | undefined,
-    updatedConversation: ChatMessage[]
-  ): Promise<void> => {
-    if (!reply) {
-      dispatch({ type: "SET_IS_GENERATING", payload: false });
-      return;
-    }
-
-    const documentContent = extractDocumentContent(reply);
-    const finalTitle = extractFinalTitle(reply) || selectedDocument?.title;
-    const cleanedReply = reply
-      .replace(
-        /### Generated Document[\s\S]*?### End of Generated Document/,
-        ""
-      )
-      .trim();
-
-    const aiResponse: ChatMessage = {
-      role: "assistant",
-      content: cleanedReply,
-    };
-    const finalConversation = [...updatedConversation, aiResponse];
-    dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
-    dispatch({ type: "SET_IS_GENERATING", payload: false });
-
-    if (documentContent) {
-      dispatch({
-        type: "SET_GENERATED_DOCUMENT",
-        payload: documentContent,
-      });
-
-      sendEventToMixpanel("document_generated", user);
-
-      if (!selectedDocument) {
-        await saveNewDocument(
-          finalConversation,
-          documentContent,
-          finalTitle || productIdea
-        );
-      } else {
-        await updateDocument(
-          finalConversation,
-          documentContent,
-          finalTitle || selectedDocument.title
-        );
-      }
-
-      dispatch({ type: "SET_DOCUMENT_UPDATED", payload: true });
-      await updateWordCredits(reply);
-    }
-  };
-
-  const updateWordCredits = async (reply: string): Promise<void> => {
-    if (!user?.id || !reply) return;
-
-    const wordCount = reply.trim().split(/\s+/).length;
-    const updatedCredits = await deductWordCredits(user.id, wordCount);
-
-    sendEventToMixpanel("ai_word_used", user, { count: wordCount });
-
-    dispatch({
-      type: "SET_WORD_CREDITS",
-      payload: {
-        remaining_credits: updatedCredits,
-        total_words_generated:
-          (wordCredits?.total_words_generated || 0) + wordCount,
-      },
-    });
-  };
-
-  const saveNewDocument = async (
-    finalConversation: ChatMessage[],
-    content: string,
-    title: string
-  ): Promise<Document | null> => {
-    if (!user?.id) {
-      console.error("User not authenticated");
-      return null;
-    }
-
-    const newDocument = {
-      user_id: user.id,
-      title,
-      content,
-      conversation: [], // Initialize with empty conversation in database
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase
-      .from("documents")
-      .insert(newDocument)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Error saving document:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save document",
-        variant: "destructive",
-      });
-      return null;
-    }
-
-    // Add conversation to local state only
-    const documentWithConversation = {
-      ...data,
-      conversation: finalConversation,
-    };
-
-    // Update app state
-    dispatch({ type: "SET_CONVERSATION", payload: finalConversation });
-
-    return documentWithConversation;
-  };
-
-  const updateDocument = async (
-    finalConversation: ChatMessage[],
-    content: string,
-    title: string
-  ): Promise<void> => {
-    if (!selectedDocument?.id) {
-      console.error("No document selected for update");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("documents")
-      .update({
-        content,
-        conversation: [], // Don't update conversation in database
-        title,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", selectedDocument.id)
-      .select();
-
-    if (error) {
-      console.error("Error updating document:", error);
-      return;
-    }
-
-    if (data?.[0]) {
-      dispatch({ type: "SET_SELECTED_DOCUMENT", payload: data[0] });
-      await fetchDocuments();
-    }
-  };
-
-  const fetchDocuments = async (): Promise<void> => {
-    if (!user?.id) return;
-
-    try {
-      const [ownedDocsResult, collaborativeDocsResult] = await Promise.all([
-        supabase
-          .from("documents")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("document_collaborators")
-          .select("document_id")
-          .eq("user_id", user.id),
-      ]);
-
-      if (ownedDocsResult.error) throw ownedDocsResult.error;
-      if (collaborativeDocsResult.error) throw collaborativeDocsResult.error;
-
-      let collabDocsDetails: Document[] = [];
-      if (collaborativeDocsResult.data?.length) {
-        const { data: collabDetails, error: detailsError } = await supabase
-          .from("documents")
-          .select("*")
-          .in(
-            "id",
-            collaborativeDocsResult.data.map((doc) => doc.document_id)
-          )
-          .order("created_at", { ascending: false });
-
-        if (detailsError) throw detailsError;
-        collabDocsDetails = collabDetails || [];
-      }
-
-      const allDocs = [...(ownedDocsResult.data || []), ...collabDocsDetails];
-      const uniqueDocs = Array.from(new Set(allDocs.map((doc) => doc.id))).map(
-        (id) => allDocs.find((doc) => doc.id === id)!
-      );
-
-      dispatch({ type: "SET_DOCUMENTS", payload: uniqueDocs });
-    } catch (error) {
-      console.error("Error fetching documents:", error);
-    } finally {
-      dispatch({ type: "SET_IS_LOADING", payload: false });
-    }
-  };
-
   return (
     <div className='border-t dark:border-gray-800 p-4 bg-background'>
       <div className='flex flex-col space-y-4'>
         <div className='flex gap-2 py-2'>
           {uploadedFiles.length > 0 && // Display uploaded file names if available
             uploadedFiles.map((file, index) => (
-              <div key={index} className='p-2 flex items-center gap-2 bg-gray-100 rounded-xl relative'>
-                <div
-                  className='text-[10px] text-bg h-10 rounded w-10 bg-gray-200 uppercase flex justify-center items-center bold '
-                >
+              <div
+                key={index}
+                className='p-2 flex items-center gap-2 bg-gray-100 rounded-xl relative'
+              >
+                <div className='text-[10px] text-bg h-10 rounded w-10 bg-gray-200 uppercase flex justify-center items-center bold '>
                   <p>{file.extension}</p>
                 </div>
                 <p className='text-sm truncate max-w-[100px]'>{file.name}</p>
@@ -548,7 +280,11 @@ export default function DocumentGenerator({
           <div className='flex flex-col items-center gap-4'>
             <textarea
               className='resize-none overflow-auto w-full flex-1 bg-transparent p-3 pb-[1.5px] text-sm outline-none ring-0 placeholder:text-gray-500'
-              style={{ minHeight: "30px", maxHeight: "384px", overflow: "auto" }}
+              style={{
+                minHeight: "30px",
+                maxHeight: "384px",
+                overflow: "auto",
+              }}
               placeholder={placeholderText}
               id='productIdea'
               value={inputValue}

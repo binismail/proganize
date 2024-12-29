@@ -19,7 +19,7 @@ interface ChatLayerProps {
 }
 
 export default function ChatLayer({ extractedText }: ChatLayerProps) {
-  const { state } = useAppContext();
+  const { state, dispatch } = useAppContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +70,19 @@ export default function ChatLayer({ extractedText }: ChatLayerProps) {
     }
   };
 
+  const saveMessage = async (message: ChatMessage, conversationId: string) => {
+    try {
+      await supabase.from("pdf_conversation_messages").insert({
+        conversation_id: conversationId,
+        role: message.role,
+        content: message.content,
+        created_at: message.created_at,
+      });
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
+  };
+
   const sendMessage = async (message: string) => {
     if (!message.trim() || !state.currentPDFConversation) return;
 
@@ -95,35 +108,50 @@ export default function ChatLayer({ extractedText }: ChatLayerProps) {
         );
       }
 
-      // Prepare the context by taking first 1000 words and last 1000 words
-      const words = pdfContent.content.split(/\s+/);
-      let contextText = "";
-
-      if (words.length > 2000) {
-        const firstPart = words.slice(0, 1000).join(" ");
-        const lastPart = words.slice(-1000).join(" ");
-        contextText = `${firstPart}\n...[Content truncated for brevity]...\n${lastPart}`;
-      } else {
-        contextText = pdfContent.content;
+      // Get auth token
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Not authenticated");
       }
 
+      // Send message to API
       const response = await fetch("/api/pdf-chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${await getToken()}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          conversation: messages.concat(newMessage),
-          referenceDocument: contextText,
+          conversation: messages.slice(-10).map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+          referenceDocument: pdfContent.content,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to send message");
+      if (!response.ok) {
+        const error = await response.json();
+        if (response.status === 402) {
+          throw new Error("Insufficient word credits. Please upgrade your plan to continue.");
+        }
+        throw new Error(error.message || "Failed to get response");
+      }
 
       const data = await response.json();
 
-      // Add assistant's response
+      // Update word credits in global state
+      if (data.remainingCredits !== undefined) {
+        dispatch({
+          type: "SET_WORD_CREDITS",
+          payload: {
+            remaining_credits: data.remainingCredits,
+            total_words_generated: state.wordCredits?.total_words_generated || 0,
+          },
+        });
+      }
+
+      // Add assistant message to UI
       const assistantMessage: ChatMessage = {
         role: "assistant",
         content: data.reply,
@@ -133,28 +161,22 @@ export default function ChatLayer({ extractedText }: ChatLayerProps) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Save messages to database
-      await supabase.from("pdf_conversation_messages").insert([
-        {
-          conversation_id: state.currentPDFConversation.id,
-          role: newMessage.role,
-          content: newMessage.content,
-          created_at: newMessage.created_at,
-        },
-        {
-          conversation_id: state.currentPDFConversation.id,
-          role: assistantMessage.role,
-          content: assistantMessage.content,
-          created_at: assistantMessage.created_at,
-        },
+      await Promise.all([
+        saveMessage(newMessage, state.currentPDFConversation.id),
+        saveMessage(assistantMessage, state.currentPDFConversation.id),
       ]);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert(error instanceof Error ? error.message : "Failed to send message");
-    } finally {
-      setIsLoading(false);
+
+      // Clear input
       if (inputRef.current) {
         inputRef.current.value = "";
       }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert(error instanceof Error ? error.message : "Failed to send message");
+      // Remove the user message if there was an error
+      setMessages((prev) => prev.slice(0, -1));
+    } finally {
+      setIsLoading(false);
     }
   };
 

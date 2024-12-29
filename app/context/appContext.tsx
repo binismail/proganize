@@ -9,7 +9,6 @@ import {
 } from "react";
 import { User } from "@supabase/supabase-js";
 import { PDFConversation } from "@/types/pdf";
-import { getPreviouslyCachedImageOrNull } from "next/dist/server/image-optimizer";
 
 interface Document {
   id: string;
@@ -62,6 +61,7 @@ interface AppState {
   showTopup: boolean;
   activeTab: string;
   currentPDFConversation: PDFConversation | null;
+  pdfConversations: PDFConversation[];
   currentDocument: contentItem | null;
   currentStudyMaterial: any | null;
 }
@@ -94,6 +94,7 @@ const initialState: AppState = {
   showTopup: false,
   activeTab: "writer",
   currentPDFConversation: null,
+  pdfConversations: [],
   currentDocument: null,
   currentStudyMaterial: null,
 };
@@ -127,8 +128,10 @@ type Action =
   | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean }
   | { type: "SET_ACTIVE_TAB"; payload: string }
   | { type: "SET_CURRENT_PDF_CONVERSATION"; payload: PDFConversation | null }
+  | { type: "SET_PDF_CONVERSATIONS"; payload: PDFConversation[] }
   | { type: "SET_CURRENT_DOCUMENT"; payload: contentItem | null }
   | { type: "SET_CURRENT_STUDY_MATERIAL"; payload: any };
+
 const AppReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
     case "SET_USER":
@@ -199,6 +202,11 @@ const AppReducer = (state: AppState, action: Action): AppState => {
       return {
         ...state,
         currentPDFConversation: action.payload,
+      };
+    case "SET_PDF_CONVERSATIONS":
+      return {
+        ...state,
+        pdfConversations: action.payload,
       };
     case "SET_CURRENT_DOCUMENT":
       return {

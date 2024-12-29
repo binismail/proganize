@@ -37,6 +37,7 @@ import RichTextEditor from "./customEditor";
 import { Toolbar } from "./toolbar";
 import AiChat from "../shared/chatUI";
 import { Spinner } from "../shared/spinner";
+import Nav from "../layout/nav";
 
 export default function EnhancedEditor() {
   const { state, dispatch } = useAppContext();
@@ -425,6 +426,7 @@ export default function EnhancedEditor() {
 
   return (
     <TooltipProvider>
+      {/* <Nav /> */}
       <div className='flex h-screen w-full flex-col'>
         {isLoading ? (
           <div className='flex justify-center items-center h-full'>

@@ -1,6 +1,8 @@
 import { supabase } from "@/utils/supabase/instance";
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
+import { calculateWordCredits } from "@/utils/wordCounter";
+import { checkWordCredits, deductWordCredits } from "@/lib/wordCredit";
 
 const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -30,12 +32,12 @@ export async function POST(req: NextRequest) {
         return new Response("Unauthorized, invalid token", { status: 401 });
     }
 
-    // Trim the conversation to not exceed token limits
-    const trimmedConversation = trimConversation(conversation, 10000);
-
-    // Create a context-aware system prompt for PDF analysis
-    const systemPrompt =
-        `You are an intelligent AI assistant specialized in analyzing and answering questions about PDF documents. 
+    try {
+        // Check word credits before processing
+        const remainingCredits = await checkWordCredits(user.user.id);
+        
+        // Estimate token usage (system prompt + conversation + reference doc)
+        const systemPrompt = `You are an intelligent AI assistant specialized in analyzing and answering questions about PDF documents. 
 
 Reference Document Content:
 \`\`\`
@@ -68,8 +70,20 @@ Important:
 - Maintain context from the conversation history
 
 Please analyze the document content and respond to queries in a way that demonstrates understanding of the full context while remaining focused on the specific question at hand.`;
+        const estimatedTokens = Math.ceil((systemPrompt.length + JSON.stringify(conversation).length + referenceDocument.length) / 4);
+        const estimatedResponseTokens = 1500; // max_tokens parameter
+        const estimatedTotalCredits = calculateWordCredits(estimatedTokens, estimatedResponseTokens);
 
-    try {
+        if (remainingCredits < estimatedTotalCredits) {
+            return new Response(
+                JSON.stringify({ error: "Insufficient word credits" }),
+                { status: 402 }
+            );
+        }
+
+        // Trim the conversation to not exceed token limits
+        const trimmedConversation = trimConversation(conversation, 10000);
+
         // Format response with markdown for better readability
         const response = await client.chat.completions.create({
             model: "gpt-4",
@@ -80,51 +94,53 @@ Please analyze the document content and respond to queries in a way that demonst
                 },
                 ...trimmedConversation,
             ],
-            temperature: 0.7, // Balanced between creativity and accuracy
-            max_tokens: 1500, // Increased for more detailed responses
-            response_format: { type: "text" }, // Ensures consistent formatting
+            temperature: 0.7,
+            max_tokens: 1500,
+            response_format: { type: "text" },
         });
 
-        if (
-            response.choices && response.choices[0] &&
-            response.choices[0].message
-        ) {
-            // Format the response with markdown
-            let formattedResponse = response.choices[0].message.content || "";
-            
-            // Add citations if they exist in the text
-            formattedResponse = formattedResponse.replace(
-                /\(page \d+\)/g,
-                (match) => `**${match}**`
-            );
-
-            // Enhance code blocks and quotes
-            formattedResponse = formattedResponse.replace(
-                /```([\s\S]*?)```/g,
-                (match, code) => `<pre><code>${code}</code></pre>`
-            );
-
-            return new Response(
-                JSON.stringify({ 
-                    reply: formattedResponse,
-                    metadata: {
-                        model: "gpt-4",
-                        tokens: response.usage?.total_tokens || 0
-                    }
-                }),
-            );
-        } else {
-            throw new Error("Unexpected response structure from OpenAI API");
+        if (!response.choices[0]?.message?.content) {
+            throw new Error("No response from OpenAI");
         }
-    } catch (error) {
-        console.error("Error in chat API:", error);
+
+        // Calculate actual token usage and deduct credits
+        const actualCredits = calculateWordCredits(
+            response.usage?.prompt_tokens || estimatedTokens,
+            response.usage?.completion_tokens || estimatedResponseTokens
+        );
+
+        await deductWordCredits(user.user.id, actualCredits);
+
+        // Format the response with markdown
+        let formattedResponse = response.choices[0].message.content;
+        
+        // Add citations if they exist in the text
+        formattedResponse = formattedResponse.replace(
+            /\(page \d+\)/g,
+            (match) => `**${match}**`
+        );
+
+        // Enhance code blocks and quotes
+        formattedResponse = formattedResponse.replace(
+            /```([\s\S]*?)```/g,
+            (match, code) => `<pre><code>${code}</code></pre>`
+        );
+
+        return new Response(JSON.stringify({
+            reply: formattedResponse,
+            metadata: {
+                model: "gpt-4",
+                tokens: response.usage?.total_tokens || 0
+            },
+            remainingCredits: remainingCredits - actualCredits
+        }), {
+            headers: { "Content-Type": "application/json" },
+        });
+    } catch (error: any) {
+        console.error("Error in PDF chat:", error);
         return new Response(
-            JSON.stringify({
-                error: error instanceof Error
-                    ? error.message
-                    : "An unknown error occurred",
-            }),
-            { status: 500 },
+            JSON.stringify({ error: error.message || "Failed to process request" }),
+            { status: 500 }
         );
     }
 }

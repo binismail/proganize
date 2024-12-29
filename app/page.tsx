@@ -14,15 +14,13 @@ import {
   Share2,
   GraduationCap,
   ClipboardList,
+  CreditCard,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/layout/nav";
-import { DashboardStats } from "@/components/dashboard/DashboardStats";
 import { RecentItems } from "@/components/dashboard/RecentItems";
 import { PromotionCard } from "@/components/dashboard/PromotionCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreditTopup } from "@/components/shared/creditTopup";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Carousel,
@@ -32,6 +30,9 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { useCarouselAutoplay } from "@/hooks/useCarouselAutoplay";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { CreditDisplay } from "@/components/shared/creditDisplay";
 
 export default function Dashboard() {
   const { dispatch, state } = useAppContext();
@@ -55,13 +56,24 @@ export default function Dashboard() {
         if (data && user) {
           dispatch({ type: "SET_USER", payload: user });
 
-          // Check and initialize word credits
-          const { credits } = await checkAndInitializeUser(user.id, user);
-          dispatch({ type: "SET_WORD_CREDITS", payload: credits });
-          setStats((prev) => ({
-            ...prev,
-            credits: credits.remaining_credits,
-          }));
+          // Get word credits
+          const { data: credits, error: creditsError } = await supabase
+            .from("word_credits")
+            .select("*")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (creditsError && creditsError.code !== "PGRST116") {
+            console.error("Error fetching credits:", creditsError);
+          }
+
+          if (credits) {
+            dispatch({ type: "SET_WORD_CREDITS", payload: credits });
+            setStats((prev) => ({
+              ...prev,
+              credits: credits.remaining_credits,
+            }));
+          }
 
           // Check subscription status
           const status = await checkSubscriptionStatus(data.user.id);
@@ -73,8 +85,11 @@ export default function Dashboard() {
           dispatch({ type: "SET_CURRENT_DOCUMENT_ID", payload: null });
           dispatch({ type: "SET_GENERATED_DOCUMENT", payload: "" });
 
-          // Fetch documents
-          await fetchDocuments(data.user.id);
+          // Fetch documents and PDF conversations
+          await Promise.all([
+            fetchDocuments(data.user.id),
+            fetchPDFConversations(data.user.id),
+          ]);
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -167,6 +182,29 @@ export default function Dashboard() {
       dispatch({ type: "SET_DOCUMENTS", payload: ownedDocs || [] });
     } catch (error) {
       console.error("Error fetching data:", error);
+    }
+  };
+
+  const fetchPDFConversations = async (userId: string) => {
+    try {
+      const { data: pdfConversations, error } = await supabase
+        .from("pdf_conversations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+      console.log(pdfConversations);
+      dispatch({
+        type: "SET_PDF_CONVERSATIONS",
+        payload: pdfConversations || [],
+      });
+      setStats((prev) => ({
+        ...prev,
+        pdfConversationsCount: pdfConversations?.length || 0,
+      }));
+    } catch (error) {
+      console.error("Error fetching PDF conversations:", error);
     }
   };
 
@@ -302,50 +340,33 @@ export default function Dashboard() {
       <Nav />
       <div className='flex-1 overflow-y-auto'>
         <main className='container mx-auto p-6 space-y-8'>
-          <div>
-            <h1 className='text-3xl font-bold'>
-              Welcome
-              {state.user
-                ? `, ${state.user.user_metadata.full_name?.toLowerCase()}`
-                : ""}
-            </h1>
-            <p className='text-muted-foreground mt-2'>
-              Here's an overview of your workspace
-            </p>
-          </div>
-
-          <DashboardStats {...stats} />
-
-          <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
-            <RecentItems
-              items={recentItems}
-              title='Recent Activity'
-              description='Your latest documents and conversations'
-            />
-            <div className='space-y-8'>
-              {/* Holiday Promotions */}
-              <div className='space-y-4'>
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-2'>
-                    <h2 className='text-2xl font-bold'>Holiday Specials</h2>
-                    <Badge variant='destructive' className='animate-pulse'>
-                      Limited Time
-                    </Badge>
-                  </div>
-                </div>
-                <CarouselWrapper items={HOLIDAY_PROMOTIONS} />
-              </div>
-
-              {/* Regular Packages */}
-              {/* <div className='space-y-4'>
-                <h2 className='text-2xl font-bold'>Credit Packages</h2>
-                <CarouselWrapper items={REGULAR_PACKAGES} />
-              </div> */}
+          <div className='flex items-center justify-between'>
+            <div>
+              <h1 className='text-3xl font-bold'>
+                Welcome
+                {state.user
+                  ? `, ${state.user.user_metadata.full_name?.toLowerCase()}`
+                  : ""}
+              </h1>
+              <p className='text-muted-foreground mt-2'>
+                Here's an overview of your workspace
+              </p>
             </div>
+            {state.user && (
+              <div className='flex items-center gap-4'>
+                <div className='bg-muted rounded-lg px-4 py-2'>
+                  <CreditDisplay variant='minimal' />
+                </div>
+                <Button onClick={() => router.push("/settings")}>
+                  <CreditCard className='h-4 w-4 mr-2' />
+                  Top Up
+                </Button>
+              </div>
+            )}
           </div>
 
           <div>
-            <h2 className='text-2xl font-bold mb-4'>Features</h2>
+            <h2 className='text-2xl font-bold mb-4'>Get Started With</h2>
             <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
               {state.isLoading
                 ? // Loading skeletons for features
@@ -382,6 +403,29 @@ export default function Dashboard() {
                       </div>
                     </button>
                   ))}
+            </div>
+          </div>
+
+          <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
+            <RecentItems
+              items={recentItems}
+              title='Recent Activity'
+              description='Your latest documents and conversations'
+            />
+            <div className='space-y-8'>
+              {/* Holiday Promotions */}
+              <div className='space-y-4'>
+                <div className='flex items-center justify-between'>
+                  <div className='flex items-center gap-2'>
+                    <h2 className='text-2xl font-bold'>Holiday Specials</h2>
+                    <Badge variant='destructive' className='animate-pulse'>
+                      Limited Time
+                    </Badge>
+                  </div>
+                </div>
+
+                <CarouselWrapper items={HOLIDAY_PROMOTIONS} />
+              </div>
             </div>
           </div>
         </main>
