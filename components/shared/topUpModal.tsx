@@ -15,16 +15,20 @@ import { loadStripe } from "@stripe/stripe-js";
 interface TopUpModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
+  userId?: string;
+  fixedAmount?: {
+    credits: number;
+    price: number;
+  };
 }
 
-export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {
+export function TopUpModal({ isOpen, onClose, userId, fixedAmount }: TopUpModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [wordAmount, setWordAmount] = useState<number>(1000);
-  const PRICE_PER_WORD = 0.002;
+  const [wordAmount, setWordAmount] = useState<number>(fixedAmount?.credits || 1000);
+  const PRICE_PER_WORD = fixedAmount ? (fixedAmount.price / fixedAmount.credits) : 0.002;
 
   const calculateTopUpPrice = (words: number) => {
-    return words * PRICE_PER_WORD;
+    return fixedAmount ? fixedAmount.price : words * PRICE_PER_WORD;
   };
 
   const handleTopUpSubmit = async () => {
@@ -45,7 +49,8 @@ export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {
         body: JSON.stringify({
           userId,
           creditAmount: wordAmount,
-          unitPrice: PRICE_PER_WORD * wordAmount,
+          unitPrice: fixedAmount ? fixedAmount.price : PRICE_PER_WORD * wordAmount,
+          isPromotion: !!fixedAmount,
         }),
       });
 
@@ -65,27 +70,37 @@ export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Top Up Word Credits</DialogTitle>
+          <DialogTitle>
+            {fixedAmount ? "Confirm Purchase" : "Top Up Word Credits"}
+          </DialogTitle>
           <DialogDescription>
-            Purchase additional word credits for your account
+            {fixedAmount
+              ? "Confirm your special offer purchase"
+              : "Purchase additional word credits for your account"}
           </DialogDescription>
         </DialogHeader>
         <div className='space-y-4 py-4'>
           <div className='space-y-2'>
             <label className='text-sm font-medium'>Number of Words</label>
-            <Input
-              type='number'
-              min='1000'
-              step='1000'
-              value={wordAmount}
-              onChange={(e) => setWordAmount(parseInt(e.target.value) || 0)}
-              className='w-full'
-            />
+            {fixedAmount ? (
+              <div className='text-lg font-semibold'>{fixedAmount.credits.toLocaleString()} words</div>
+            ) : (
+              <Input
+                type='number'
+                min='1000'
+                step='1000'
+                value={wordAmount}
+                onChange={(e) => setWordAmount(parseInt(e.target.value) || 0)}
+                className='w-full'
+              />
+            )}
           </div>
-          <div className='flex justify-between text-sm'>
-            <span>Price per word:</span>
-            <span>${PRICE_PER_WORD.toFixed(3)}</span>
-          </div>
+          {!fixedAmount && (
+            <div className='flex justify-between text-sm'>
+              <span>Price per word:</span>
+              <span>${PRICE_PER_WORD.toFixed(3)}</span>
+            </div>
+          )}
           <div className='flex justify-between font-medium'>
             <span>Total Price:</span>
             <span>${calculateTopUpPrice(wordAmount).toFixed(2)}</span>
@@ -97,15 +112,15 @@ export function TopUpModal({ isOpen, onClose, userId }: TopUpModalProps) {
           </Button>
           <Button
             onClick={handleTopUpSubmit}
-            disabled={isProcessing || wordAmount < 1000}
+            disabled={isProcessing || (!fixedAmount && wordAmount < 1000)}
           >
             {isProcessing ? (
               <>
-                <Spinner size='sm' className='mr-2' />
+                <Spinner className='mr-2 h-4 w-4' />
                 Processing...
               </>
             ) : (
-              "Purchase Credits"
+              `Purchase ${fixedAmount ? 'Package' : 'Credits'}`
             )}
           </Button>
         </DialogFooter>

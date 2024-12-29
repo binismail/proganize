@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useAppContext } from "../context/appContext";
 import {
@@ -21,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  CreditCard,
   Download,
   AlertTriangle,
   ChevronLeft,
@@ -29,11 +27,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Check } from "lucide-react"; // Make sure to import the Check icon
-import { Switch } from "@/components/ui/switch";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
 import Confetti from "react-confetti";
 
-import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { Spinner } from "@/components/shared/spinner";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -57,6 +53,7 @@ import { TopUpModal } from "@/components/shared/topUpModal";
 import { CancelSubscriptionModal } from "@/components/shared/CancelSubscriptionModal";
 import { toast } from "@/hooks/use-toast";
 import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
+import { PromotionCard } from "@/components/dashboard/PromotionCard";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
@@ -92,6 +89,45 @@ function BillingPageContent() {
   const LOW_CREDITS_THRESHOLD = 1000;
   const [paymentData, setPaymentData] = useState<any>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
+  // Holiday promotions
+  const HOLIDAY_PROMOTIONS = [
+    {
+      title: "Holiday Special",
+      description: "Get 50% extra credits this holiday season! ",
+      price: 10,
+      baseCredits: 5000,
+      bonusCredits: 2500,
+      isHolidayOffer: true,
+    },
+    {
+      title: "New Year Bundle",
+      description: "Start 2024 with double credits! ",
+      price: 20,
+      baseCredits: 10000,
+      bonusCredits: 10000,
+      isHolidayOffer: true,
+    },
+  ];
+
+  // Regular packages
+  const REGULAR_PACKAGES = [
+    {
+      title: "Starter Pack",
+      description: "Perfect for small projects",
+      price: 10,
+      baseCredits: 5000,
+    },
+    {
+      title: "Pro Pack",
+      description: "Most popular choice for professionals",
+      price: 25,
+      baseCredits: 15000,
+      isSpecialOffer: true,
+    },
+  ];
+
+  const isHolidayPromoActive = true;
 
   useEffect(() => {
     const initializePage = async () => {
@@ -215,13 +251,13 @@ function BillingPageContent() {
         setPaymentData(data);
         setShowConfetti(true);
         setShowModal(true);
-        if (data.metadata) {
+        if (data.metadata?.creditAmount) {
           const creditAmountStr = data?.metadata?.creditAmount;
           const creditAmount = creditAmountStr
             ? parseInt(creditAmountStr, 10)
             : 0;
           const amountPaid = creditAmount * 0.002;
-          sendEventToMixpanel("topup", { amount: amountPaid }, user);
+          sendEventToMixpanel("topup", user, { amount: amountPaid });
         }
       }
 
@@ -546,6 +582,31 @@ function BillingPageContent() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Holiday Promotions */}
+            {isHolidayPromoActive && (
+              <div className='space-y-4 mt-8'>
+                <div className='flex items-center gap-2'>
+                  <h2 className='text-2xl font-bold'>Holiday Specials</h2>
+                  <Badge variant='destructive'>Limited Time</Badge>
+                </div>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  {HOLIDAY_PROMOTIONS.map((promo, index) => (
+                    <PromotionCard key={index} {...promo} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Regular Packages */}
+            <div className='space-y-4 mt-8'>
+              <h2 className='text-2xl font-bold'>Credit Packages</h2>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                {REGULAR_PACKAGES.map((pack, index) => (
+                  <PromotionCard key={index} {...pack} />
+                ))}
+              </div>
+            </div>
 
             <SubscribeModal
               isOpen={isSubscribeModalOpen}

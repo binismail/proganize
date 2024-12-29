@@ -4,14 +4,37 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Nav from "@/components/layout/nav";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ChevronLeft } from "lucide-react";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function PrivacyAndTermsPage() {
   const [activeTab, setActiveTab] = useState("privacy");
 
+  const router = useRouter();
+
   return (
     <div className='min-h-screen flex flex-col bg-background text-foreground'>
-      <Nav />
-
+      <div className='flex items-center gap-4 mb-8 m-10'>
+        <div className='cursor-pointer' onClick={() => router.push("/")}>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <ChevronLeft className='mt-2' />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Return Home</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <h1 className='text-3xl font-bold'>Privacy Terms</h1>
+      </div>
       <main className='flex-grow flex flex-col'>
         <div className='container mx-auto px-4 py-6 flex-grow flex flex-col'>
           <div className='flex space-x-4 mb-6'>
@@ -37,7 +60,7 @@ export default function PrivacyAndTermsPage() {
                     Privacy Policy for Proganize (by Gistabyte Inc.)
                   </h2>
                   <p className='text-sm text-muted-foreground'>
-                    Effective Date: [Insert Date]
+                    Effective Date: 13th of November, 2024
                   </p>
 
                   <section>
@@ -167,7 +190,7 @@ export default function PrivacyAndTermsPage() {
                     <h3 className='text-2xl font-semibold'>Contact Us</h3>
                     <p>
                       For questions or concerns about this policy, please
-                      contact us at [support email].
+                      contact us at support@starterslab.co.
                     </p>
                   </section>
                 </div>
@@ -177,7 +200,7 @@ export default function PrivacyAndTermsPage() {
                     Terms of Service for Proganize (by Gistabyte Inc.)
                   </h2>
                   <p className='text-sm text-muted-foreground'>
-                    Effective Date: [Insert Date]
+                    Effective Date: 13th of November, 2024
                   </p>
 
                   <section>
@@ -303,7 +326,7 @@ export default function PrivacyAndTermsPage() {
                     <h3 className='text-2xl font-semibold'>Contact Us</h3>
                     <p>
                       For questions or concerns about these Terms, please
-                      contact us at [support email].
+                      contact us at support@starterslab.co.
                     </p>
                   </section>
                 </div>

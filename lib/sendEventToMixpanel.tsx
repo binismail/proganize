@@ -1,8 +1,9 @@
 import getUser from "@/app/actions";
+import { User } from "@supabase/supabase-js";
 
 const sendEventToMixpanel = async (
     eventName: string,
-    user: any,
+    user: User | null | Record<string, any>,
     eventProperties?: Record<string, any>,
 ) => {
     //here we are getting the location from a separate endpoint /api/proxy
