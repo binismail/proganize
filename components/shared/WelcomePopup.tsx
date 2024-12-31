@@ -59,9 +59,9 @@ export function WelcomePopup({ isOpen, onClose, userName }: WelcomePopupProps) {
               Here's what you can do with your credits:
             </div>
             <ul className='mt-2 space-y-2 text-sm'>
-              <li>• Generate professional documents</li>
-              <li>• Create compelling content</li>
-              <li>• Get AI-powered assistance</li>
+              <li>• Chat with PDFs and generate documents</li>
+              <li>• Create study guides & flashcard</li>
+              <li>• Generate viral linkedin posts</li>
             </ul>
           </div>
 

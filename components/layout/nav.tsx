@@ -177,10 +177,7 @@ export default function Nav() {
   const handleGoogleAuth = async () => {
     if (user) {
       await signOut();
-      dispatch({ type: "SET_CONVERSATION", payload: [] });
-      dispatch({ type: "SET_IS_EDITOR_VISIBLE", payload: false });
-      dispatch({ type: "SET_HAS_GENERATION_STARTED", payload: false });
-      dispatch({ type: "SET_SHOW_INITIAL_CONTENT", payload: true });
+      localStorage.removeItem("appState");
       router.push("/");
     } else {
       await signIn();

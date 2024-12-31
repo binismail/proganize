@@ -22,10 +22,19 @@ interface TopUpModalProps {
   };
 }
 
-export function TopUpModal({ isOpen, onClose, userId, fixedAmount }: TopUpModalProps) {
+export function TopUpModal({
+  isOpen,
+  onClose,
+  userId,
+  fixedAmount,
+}: TopUpModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [wordAmount, setWordAmount] = useState<number>(fixedAmount?.credits || 1000);
-  const PRICE_PER_WORD = fixedAmount ? (fixedAmount.price / fixedAmount.credits) : 0.002;
+  const [wordAmount, setWordAmount] = useState<number>(
+    fixedAmount?.credits || 1000
+  );
+  const PRICE_PER_WORD = fixedAmount
+    ? fixedAmount.price / fixedAmount.credits
+    : 0.002;
 
   const calculateTopUpPrice = (words: number) => {
     return fixedAmount ? fixedAmount.price : words * PRICE_PER_WORD;
@@ -49,7 +58,9 @@ export function TopUpModal({ isOpen, onClose, userId, fixedAmount }: TopUpModalP
         body: JSON.stringify({
           userId,
           creditAmount: wordAmount,
-          unitPrice: fixedAmount ? fixedAmount.price : PRICE_PER_WORD * wordAmount,
+          unitPrice: fixedAmount
+            ? fixedAmount.price
+            : PRICE_PER_WORD * wordAmount,
           isPromotion: !!fixedAmount,
         }),
       });
@@ -83,7 +94,9 @@ export function TopUpModal({ isOpen, onClose, userId, fixedAmount }: TopUpModalP
           <div className='space-y-2'>
             <label className='text-sm font-medium'>Number of Words</label>
             {fixedAmount ? (
-              <div className='text-lg font-semibold'>{fixedAmount.credits.toLocaleString()} words</div>
+              <div className='text-lg font-semibold'>
+                {fixedAmount.credits.toLocaleString()} words
+              </div>
             ) : (
               <Input
                 type='number'
@@ -120,7 +133,7 @@ export function TopUpModal({ isOpen, onClose, userId, fixedAmount }: TopUpModalP
                 Processing...
               </>
             ) : (
-              `Purchase ${fixedAmount ? 'Package' : 'Credits'}`
+              `Purchase ${fixedAmount ? "Package" : "Credits"}`
             )}
           </Button>
         </DialogFooter>
