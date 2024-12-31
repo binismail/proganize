@@ -37,6 +37,7 @@ import RichTextEditor from "./customEditor";
 import { Toolbar } from "./toolbar";
 import AiChat from "../shared/chatUI";
 import { Spinner } from "../shared/spinner";
+import Nav from "../layout/nav";
 
 export default function EnhancedEditor() {
   const { state, dispatch } = useAppContext();
@@ -149,19 +150,24 @@ export default function EnhancedEditor() {
         // Fetch document content
         const { data: documentData, error: documentError } = await supabase
           .from("documents")
-          .select("content")
+          .select("content, title")
           .eq("id", currentDocumentId)
           .single();
 
         if (documentError) {
           console.error("Error fetching document content:", documentError);
+          setIsLoading(false);
           return;
         }
 
         if (documentData) {
           dispatch({
             type: "SET_GENERATED_DOCUMENT",
-            payload: documentData.content,
+            payload: documentData.content || "",
+          });
+          dispatch({
+            type: "SET_NEW_TITLE",
+            payload: documentData.title || "Untitled",
           });
         }
 
@@ -189,67 +195,32 @@ export default function EnhancedEditor() {
             description: "Please try again later",
             variant: "destructive",
           });
-          return;
+        } else {
+          const currentUserId = user?.id;
+          const isCurrentUserViewer = collaboratorsData?.some(
+            (item: any) =>
+              item.user_id === currentUserId && item.role === "viewer"
+          );
+
+          setIsViewer(isCurrentUserViewer);
+
+          setCollaborators(
+            collaboratorsData.map((item: any) => ({
+              id: item.user_id,
+              name: item.user_profiles.full_name || "Unknown",
+              avatar: item.user_profiles.avatar_url,
+              role: item.role,
+            }))
+          );
         }
-
-        const currentUserId = user?.id; // Get the current user's ID
-        const isCurrentUserViewer = collaboratorsData.some(
-          (item: any) =>
-            item.user_id === currentUserId && item.role === "viewer"
-        );
-
-        setIsViewer(isCurrentUserViewer); // Set viewer state based on role
-
-        setCollaborators(
-          collaboratorsData.map((item: any) => ({
-            id: item.user_id,
-            name: item.user_profiles.full_name || "Unknown",
-            avatar: item.user_profiles.avatar_url,
-            role: item.role,
-          }))
-        );
 
         setIsLoading(false);
       };
 
       fetchDocumentData();
     }
-  }, [currentDocumentId, dispatch, user]);
+  }, [currentDocumentId, dispatch, user, toast]);
 
-  //   const { data, error } = await supabase
-  //     .from("document_collaborators")
-  //     .select(
-  //       `
-  //       user_id,
-  //       role,
-  //       user_profiles!inner(
-  //         id,
-  //         full_name,
-  //         avatar_url
-  //       )
-  //     `
-  //     )
-  //     .eq("document_id", documentId);
-
-  //   if (error) {
-  //     console.error("Error fetching collaborators:", error);
-  //     toast({
-  //       title: "Error fetching collaborators",
-  //       description: "Please try again later",
-  //       variant: "destructive",
-  //     });
-  //     return;
-  //   }
-
-  //   setCollaborators(
-  //     data.map((item: any) => ({
-  //       id: item.user_id,
-  //       name: item.user_profiles.full_name || "Unknown",
-  //       avatar: item.user_profiles.avatar_url,
-  //       role: item.role,
-  //     }))
-  //   );
-  // };
   const checkOwnership = useCallback(async () => {
     console.log("Checking ownership:", { user, currentDocumentId });
     if (!user || !currentDocumentId) return;
@@ -455,6 +426,7 @@ export default function EnhancedEditor() {
 
   return (
     <TooltipProvider>
+      {/* <Nav /> */}
       <div className='flex h-screen w-full flex-col'>
         {isLoading ? (
           <div className='flex justify-center items-center h-full'>

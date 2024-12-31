@@ -8,7 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, userId, subscription, creditAmount, unitPrice, first50 } =
+    const { type, userId, subscription, creditAmount, unitPrice, first50, isPromotion } =
       body;
 
     if (!userId) {
@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
       }
     } else {
       // Handle top-up flow
-      if (!creditAmount || creditAmount < 10 || creditAmount > 10000) {
+      if (!creditAmount || creditAmount < 10 || creditAmount > 50000) {
         return new Response(
           JSON.stringify({
-            error: "Credit amount must be between 10 and 10,000",
+            error: "Credit amount must be between 10 and 50,000",
           }),
           {
             status: 400,
@@ -80,6 +80,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      let productName = isPromotion ? "Holiday Special" : "Proganize AI Credits";
+      let description = isPromotion 
+        ? `Special offer: ${creditAmount.toLocaleString()} AI words`
+        : `Top-up for ${creditAmount.toLocaleString()} AI words`;
+
       sessionOptions = {
         payment_method_types: ["card", "link"],
         mode: "payment",
@@ -87,9 +92,8 @@ export async function POST(req: NextRequest) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "Proganize AI Credits",
-              description:
-                `Top-up for ${creditAmount.toLocaleString()} AI words`,
+              name: productName,
+              description: description,
             },
             unit_amount: Math.round(unitPrice * 100),
           },
@@ -98,7 +102,11 @@ export async function POST(req: NextRequest) {
         success_url:
           `${process.env.NEXT_PUBLIC_BASE_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/billing`,
-        metadata: { userId, creditAmount },
+        metadata: { 
+          userId, 
+          creditAmount,
+          isPromotion: isPromotion ? "true" : "false"
+        },
       };
     }
 
@@ -110,7 +118,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in POST /api/checkout-session:", error);
+    console.error("Error creating checkout session:", error);
     const errorMessage = error instanceof Error
       ? error.message
       : "An unknown error occurred";

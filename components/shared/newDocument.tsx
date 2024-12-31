@@ -17,7 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FileText, Users, Lightbulb, Eye, Map, BookOpen } from "lucide-react";
-import DocumentGenerator from "./documentGenerator";
+import DynamicDocumentGenerator from "./dynamicDocumentGenerator";
 
 const documentTypes = [
   {
@@ -216,7 +216,7 @@ export default function NewDocument({
               )}
           </div>
           <div>
-            <DocumentGenerator
+            <DynamicDocumentGenerator
               subscriptionStatus='inactive'
               placeholderText={getPlaceholderText() || ""} // Pass an empty string if getPlaceholderText() returns null
               documentType={selectedType || ""} // Pass an empty string if selectedType is null

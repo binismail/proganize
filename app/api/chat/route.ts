@@ -7,6 +7,8 @@ const client = new OpenAI({
 });
 
 function trimConversation(conversation: any[], maxChars: number): any[] {
+  if (!conversation || !Array.isArray(conversation)) return [];
+  
   let totalChars = JSON.stringify(conversation).length;
   while (totalChars > maxChars && conversation.length > 0) {
     conversation.shift(); // Remove the oldest message
@@ -16,7 +18,7 @@ function trimConversation(conversation: any[], maxChars: number): any[] {
 }
 
 export async function POST(req: NextRequest) {
-  const { conversation, documentType, template, referenceDocument } = await req
+  const { messages, conversation, documentType, template, templateContext, referenceDocument } = await req
     .json();
 
   const authHeader = req.headers.get("authorization");
@@ -37,28 +39,28 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Trim the conversation to not exceed 10,000 characters
-  const trimmedConversation = trimConversation(conversation, 10000);
+  try {
+    // Handle both messages (from AI editor) and conversation (from document generator)
+    const messageArray = messages || conversation || [];
+    const trimmedMessages = trimConversation(messageArray, 10000);
 
-  // Create a context-aware system prompt
-  const systemPrompt =
-    `You are an intelligent AI assistant helping users create professional documentation. ${
-      documentType
-        ? `You are specifically focused on creating ${documentType} documentation${
-          template ? ` using the "${template}" template` : ""
-        }.`
-        : "You will help create well-structured documentation based on the user's needs."
-    }
+    // Create a context-aware system prompt for document generation
+    const systemPrompt = documentType ? 
+      `You are an intelligent AI assistant helping users create professional documentation. ${
+        documentType
+          ? `You are specifically focused on creating ${documentType} documentation${
+            template ? ` using the "${template}" template` : ""
+          }.`
+          : "You will help create well-structured documentation based on the user's needs."
+      }
 
-${
-      referenceDocument
-        ? `
-Reference Document Content:
-\`\`\`
-${referenceDocument}
-\`\`\`
+      ${
+        templateContext ? `
+      Template Information:
+      ${templateContext}
+      
 
-Please use the above reference document content to inform and enhance your responses. When relevant, incorporate insights from this document while maintaining the requested document structure.
+      Please use the above reference document content to inform and enhance your responses. When relevant, incorporate insights from this document while maintaining the requested document structure.
 `
         : ""
     }
@@ -102,86 +104,52 @@ Document Structure Guidelines:
 - Break content into logical sections with clear headings
 - Include examples where appropriate
 - Add placeholders for missing critical information
-- End with next steps or action items${
-      documentType === "technical-spec"
-        ? `
-Additional Technical Spec Guidelines:
-- Include system architecture details
-- List technical requirements
-- Specify dependencies and constraints
-- Document API endpoints or interfaces
-- Include security considerations`
-        : documentType === "user-stories"
-        ? `
-Additional User Story Guidelines:
-- Use standard user story format
-- Include acceptance criteria
-- Specify user personas
-- Detail expected behavior
-- List edge cases and exceptions`
-        : documentType === "product-insights"
-        ? `
-Additional PRD Guidelines:
-- Include market analysis
-- Define success metrics
-- List feature requirements
-- Specify user flows
-- Document constraints and limitations`
-        : ""
-    }
+- End with next steps or action items
+      ${
+        referenceDocument
+          ? `
+      Reference Document Content:
+      \`\`\`
+      ${referenceDocument}
+      \`\`\`
 
-Example Response Structure:
----
-I understand you're looking to create ${
-      documentType || "a document"
-    }. Let me help structure this properly. Could you provide more details about...
+      Please use the above reference document content to inform and enhance your responses. When relevant, incorporate insights from this document while maintaining the requested document structure.
+      
+      `
+          : ""
+      }` : undefined;
 
-### Document Title: [Generated Title]
-### Generated Document
-# [Document Title]
-
-## Overview
-[Comprehensive introduction]
-
-## [Main Section]
-[Detailed content]
-
-## Next Steps
-[Action items or follow-up tasks]
-### End of Generated Document
----`;
-
-  try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
+    const completion = await client.chat.completions.create({
+      model: "gpt-4",
       messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        ...trimmedConversation,
+        ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
+        ...trimmedMessages
       ],
+      temperature: 0.7,
+      max_tokens: 2000,
     });
 
-    if (
-      response.choices && response.choices[0] &&
-      response.choices[0].message
-    ) {
-      return new Response(
-        JSON.stringify({ reply: response.choices[0].message.content }),
-      );
-    } else {
-      throw new Error("Unexpected response structure from OpenAI API");
-    }
-  } catch (error) {
-    console.error("Error in chat API:", error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error
-          ? error.message
-          : "An unknown error occurred",
+        content: completion.choices[0].message.content,
       }),
-      { status: 500 },
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  } catch (error) {
+    console.error("OpenAI API error:", error);
+    return new Response(
+      JSON.stringify({ error: "Failed to generate content" }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 }

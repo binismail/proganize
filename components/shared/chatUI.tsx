@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useAppContext } from "@/app/context/appContext";
 import { Close } from "@radix-ui/react-toast";
-import Conversation from "./conversation";
-import DocumentGenerator from "./documentGenerator";
+import DynamicDocumentGenerator from "./dynamicDocumentGenerator";
 import { Sparkles, X } from "lucide-react";
 import "./chatUi.css"; // Import the CSS file for styles
+import Conversation from "./conversation";
 
 export default function AiChat({
   isCollapsed,
@@ -24,7 +25,7 @@ export default function AiChat({
             <X size={20} className='cursor-pointer' onClick={onClose} />
           </div>
           <Conversation />
-          <DocumentGenerator
+          <DynamicDocumentGenerator
             subscriptionStatus='inactive'
             placeholderText='Ask me anything related to your document' // Add appropriate placeholder text
           />

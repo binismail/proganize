@@ -42,10 +42,38 @@ export async function POST(request: NextRequest) {
     // Check if this is a credit top-up
     if (session.metadata?.creditAmount) {
       try {
+        const creditAmount = parseInt(session.metadata.creditAmount);
+        let totalCredits = creditAmount;
+
+        // Add bonus credits for promotions
+        if (session.metadata.isPromotion === "true") {
+          // Add 50% bonus for holiday special
+          const bonusCredits = Math.floor(creditAmount * 0.5);
+          totalCredits += bonusCredits;
+
+          // Track promotion usage in mixpanel
+          mixpanel.track("Holiday Promotion Used", {
+            distinct_id: session.metadata.userId,
+            creditAmount: creditAmount,
+            bonusCredits: bonusCredits,
+            totalCredits: totalCredits,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         const updatedCredits = await addWordCredits(
           session.metadata.userId,
-          parseInt(session.metadata.creditAmount),
+          totalCredits,
         );
+
+        // Record the transaction
+        await supabase.from("credit_transactions").insert({
+          user_id: session.metadata.userId,
+          amount: creditAmount,
+          bonus_amount: session.metadata.isPromotion === "true" ? Math.floor(creditAmount * 0.5) : 0,
+          transaction_type: session.metadata.isPromotion === "true" ? "holiday_promotion" : "top_up",
+          stripe_session_id: session.id,
+        });
 
         console.log(
           `Credits added successfully. New balance: ${updatedCredits}`,

@@ -1,6 +1,5 @@
-"use client"; // Add this line at the top of the file
+"use client";
 
-import { getPreviouslyCachedImageOrNull } from "next/dist/server/image-optimizer";
 import {
   createContext,
   useContext,
@@ -8,10 +7,15 @@ import {
   ReactNode,
   useEffect,
 } from "react";
+import { User } from "@supabase/supabase-js";
+import { PDFConversation } from "@/types/pdf";
 
 interface Document {
   id: string;
   title: string;
+  user_id: string;
+  content?: string;
+  conversation?: [];
   updated_at?: string;
   created_at: string;
 }
@@ -21,7 +25,12 @@ interface ConversationItem {
   content: string;
 }
 
-interface State {
+interface contentItem {
+  title: string;
+  template: string;
+}
+
+interface AppState {
   user: any;
   productIdea: string;
   documents: Document[];
@@ -50,9 +59,14 @@ interface State {
   } | null;
   showUpgrade: boolean;
   showTopup: boolean;
+  activeTab: string;
+  currentPDFConversation: PDFConversation | null;
+  pdfConversations: PDFConversation[];
+  currentDocument: contentItem | null;
+  currentStudyMaterial: any | null;
 }
 
-const initialState: State = {
+const initialState: AppState = {
   user: null,
   productIdea: "",
   documents: [],
@@ -78,11 +92,16 @@ const initialState: State = {
   wordCredits: null,
   showUpgrade: false,
   showTopup: false,
+  activeTab: "writer",
+  currentPDFConversation: null,
+  pdfConversations: [],
+  currentDocument: null,
+  currentStudyMaterial: null,
 };
 
 // Define actions
 type Action =
-  | { type: "SET_USER"; payload: any }
+  | { type: "SET_USER"; payload: User | null }
   | { type: "SET_PRODUCT_IDEA"; payload: string }
   | { type: "SET_DOCUMENTS"; payload: Document[] }
   | { type: "SET_GENERATED_DOCUMENT"; payload: string }
@@ -101,14 +120,19 @@ type Action =
   | { type: "SET_PAYMENT_METHODS"; payload: any[] }
   | { type: "SET_INVOICES"; payload: any[] }
   | { type: "SET_SUBSCRIPTION_STATUS"; payload: string }
-  | { type: "INITIALIZE_STATE"; payload: Partial<State> }
+  | { type: "INITIALIZE_STATE"; payload: Partial<AppState> }
   | { type: "SET_SAVING_STATUS"; payload: boolean }
   | { type: "SET_OPEN_DOCUMENT"; payload: boolean }
   | { type: "SET_WORD_CREDITS"; payload: any }
   | { type: "SET_SHOW_UPGRADE_MODAL"; payload: boolean }
-  | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean };
+  | { type: "SET_SHOW_TOPUP_MODAL"; payload: boolean }
+  | { type: "SET_ACTIVE_TAB"; payload: string }
+  | { type: "SET_CURRENT_PDF_CONVERSATION"; payload: PDFConversation | null }
+  | { type: "SET_PDF_CONVERSATIONS"; payload: PDFConversation[] }
+  | { type: "SET_CURRENT_DOCUMENT"; payload: contentItem | null }
+  | { type: "SET_CURRENT_STUDY_MATERIAL"; payload: any };
 
-const AppReducer = (state: State, action: Action): State => {
+const AppReducer = (state: AppState, action: Action): AppState => {
   switch (action.type) {
     case "SET_USER":
       return { ...state, user: action.payload };
@@ -169,13 +193,38 @@ const AppReducer = (state: State, action: Action): State => {
         ...state,
         showTopup: action.payload,
       };
+    case "SET_ACTIVE_TAB":
+      return {
+        ...state,
+        activeTab: action.payload,
+      };
+    case "SET_CURRENT_PDF_CONVERSATION":
+      return {
+        ...state,
+        currentPDFConversation: action.payload,
+      };
+    case "SET_PDF_CONVERSATIONS":
+      return {
+        ...state,
+        pdfConversations: action.payload,
+      };
+    case "SET_CURRENT_DOCUMENT":
+      return {
+        ...state,
+        currentDocument: action.payload,
+      };
+    case "SET_CURRENT_STUDY_MATERIAL":
+      return {
+        ...state,
+        currentStudyMaterial: action.payload,
+      };
     default:
       return state;
   }
 };
 
 const AppContext = createContext<{
-  state: State;
+  state: AppState;
   dispatch: React.Dispatch<Action>;
 }>({ state: initialState, dispatch: () => null });
 

@@ -5,6 +5,9 @@ import { ThemeProvider } from "next-themes";
 import { AppProvider } from "./context/appContext";
 import { Toaster } from "@/components/ui/toaster";
 import Script from "next/script";
+import SupabaseProvider from './supabase-provider'
+import { GlobalTopUpModal } from "@/components/shared/GlobalTopUpModal";
+
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -29,18 +32,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang='en'>
-      <body className={`${lotaGrotesque.variable} antialiased`}>
+    <html lang='en' suppressHydrationWarning>
+      <body
+        className={`${lotaGrotesque.variable} antialiased`}
+      >
         <Script
           async
           defer
           src='https://cloud.umami.is/script.js'
           data-website-id='2fd5a43f-e6b3-478d-8e76-d26042f05d11'
         />
-        <ThemeProvider attribute='class' defaultTheme='system' enableSystem>
-          <AppProvider>{children}</AppProvider>
+        <ThemeProvider
+          attribute='class'
+          defaultTheme='system'
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SupabaseProvider>
+            <AppProvider>
+              {children}
+              <GlobalTopUpModal />
+              <Toaster />
+            </AppProvider>
+          </SupabaseProvider>
         </ThemeProvider>
-        <Toaster />
       </body>
     </html>
   );

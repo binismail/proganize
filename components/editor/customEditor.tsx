@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { BubbleMenu } from "../shared/bubbleMenue";
 import { useAppContext } from "@/app/context/appContext";
+import { AiEditor } from "./aiEditor";
+import { Wand2 } from "lucide-react";
 
 interface EditorProps {
   initialContent?: string;
@@ -46,6 +48,7 @@ export default function RichTextEditor({
   const [currentHeading, setCurrentHeading] = useState("p");
   const [aiPrompt, setAiPrompt] = useState<string | null>(null);
   const [isAIDialogOpen, setIsAIDialogOpen] = useState(false);
+  const [isAiEditorOpen, setIsAiEditorOpen] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [showBubbleMenu, setShowBubbleMenu] = useState(false);
   const [bubbleMenuPosition, setBubbleMenuPosition] = useState({
@@ -59,30 +62,35 @@ export default function RichTextEditor({
 
   useEffect(() => {
     const convertMarkdownToHTML = async () => {
-      if (!editorRef.current) return; // Add null check
+      if (!editorRef.current) return; // Early return if ref not available
 
-      // Create a temporary div to sanitize the content
-      const tempDiv = document.createElement("div");
-      const parsedContent = await marked.parse(initialContent);
-      tempDiv.innerHTML = parsedContent;
+      try {
+        // Create a temporary div to sanitize the content
+        const tempDiv = document.createElement("div");
+        const parsedContent = await marked.parse(initialContent || "");
+        tempDiv.innerHTML = parsedContent;
 
-      // Ensure all elements inside have proper direction
-      const allElements = tempDiv.getElementsByTagName("*");
-      for (let i = 0; i < allElements.length; i++) {
-        const element = allElements[i] as HTMLElement;
-        element.setAttribute("dir", "ltr");
-        element.style.textAlign = "left";
-      }
-
-      // Only update if content has changed
-      if (editorRef.current.innerHTML !== tempDiv.innerHTML) {
-        editorRef.current.innerHTML = tempDiv.innerHTML;
-        editorRef.current.dir = "ltr";
-        if (onUpdate) {
-          onUpdate(tempDiv.innerHTML);
+        // Ensure all elements inside have proper direction
+        const allElements = tempDiv.getElementsByTagName("*");
+        for (let i = 0; i <allElements.length; i++) {
+          const element = allElements[i] as HTMLElement;
+          element.setAttribute("dir", "ltr");
+          element.style.textAlign = "left";
         }
+
+        // Check if the editor ref is still available and content has changed
+        if (editorRef.current && editorRef.current.innerHTML !== tempDiv.innerHTML) {
+          editorRef.current.innerHTML = tempDiv.innerHTML;
+          editorRef.current.dir = "ltr";
+          if (onUpdate) {
+            onUpdate(tempDiv.innerHTML);
+          }
+        }
+      } catch (error) {
+        console.error("Error converting markdown to HTML:", error);
       }
     };
+    
     convertMarkdownToHTML();
   }, [initialContent, onUpdate]);
 
@@ -220,6 +228,25 @@ export default function RichTextEditor({
     [externalToggleList, updateContent]
   );
 
+  const handleAiEdit = (newText: string) => {
+    if (!editorRef.current || !selectionRef.current) return;
+
+    // Restore the selection
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(selectionRef.current);
+
+      // Replace the selected text
+      document.execCommand("insertHTML", false, newText);
+
+      // Update the content
+      if (onUpdate) {
+        onUpdate(editorRef.current.innerHTML);
+      }
+    }
+  };
+
   const handleEnhanceWithAI = async () => {
     const textToEnhance = selectedText || (editorRef.current?.innerText ?? "");
     // const prompt = await generateAIPrompt(textToEnhance);
@@ -331,14 +358,29 @@ export default function RichTextEditor({
         dir='ltr' // Add this attribute
       />
       {showBubbleMenu && (
-        <BubbleMenu
-          position={bubbleMenuPosition}
-          onFormatText={formatText}
-          onAlignText={alignText}
-          onHeadingChange={handleHeadingChange}
-          onEnhanceWithAI={handleEnhanceWithAI}
-        />
+        <div
+          style={{
+            position: "fixed",
+            top: `${bubbleMenuPosition.top}px`,
+            left: `${bubbleMenuPosition.left}px`,
+            transform: "translate(-50%, -100%)",
+            zIndex: 50,
+          }}
+        >
+          <BubbleMenu
+            onBold={() => formatText("bold")}
+            onItalic={() => formatText("italic")}
+            onUnderline={() => formatText("underline")}
+            onAiEdit={() => setIsAiEditorOpen(true)}
+          />
+        </div>
       )}
+      <AiEditor
+        selectedText={selectedText}
+        onUpdate={handleAiEdit}
+        isOpen={isAiEditorOpen}
+        onClose={() => setIsAiEditorOpen(false)}
+      />
       {/* <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
         <DialogContent>
           <DialogHeader>

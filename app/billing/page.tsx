@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useAppContext } from "../context/appContext";
 import {
@@ -21,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  CreditCard,
   Download,
   AlertTriangle,
   ChevronLeft,
@@ -29,11 +27,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Check } from "lucide-react"; // Make sure to import the Check icon
-import { Switch } from "@/components/ui/switch";
 import { SubscribeModal } from "@/components/shared/subscribeModal";
 import Confetti from "react-confetti";
 
-import Nav from "@/components/layout/nav";
 import { supabase } from "@/utils/supabase/instance";
 import { Spinner } from "@/components/shared/spinner";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -57,6 +53,7 @@ import { TopUpModal } from "@/components/shared/topUpModal";
 import { CancelSubscriptionModal } from "@/components/shared/CancelSubscriptionModal";
 import { toast } from "@/hooks/use-toast";
 import sendEventToMixpanel from "@/lib/sendEventToMixpanel";
+import { PromotionCard } from "@/components/dashboard/PromotionCard";
 
 function BillingPageContent() {
   const { state, dispatch } = useAppContext();
@@ -68,22 +65,7 @@ function BillingPageContent() {
   const [isAnnual] = useState(false);
   const annualDiscount = 0.2; // 20% discount for annual billing
 
-  const premiumPlan = {
-    name: "Pro",
-    monthlyPrice: 14.99,
-    features: [
-      "Share documents publicly with a direct link",
-      "Unlimited collaborators",
-      "Unlimited conversations with your documents",
-      "Download documents in PDF and DOCX formats",
-      "Generate add-ons (user stories, technical requirements, product roadmaps)",
-      "Upload documents for AI-powered enhancement",
-      "Priority support",
-      "Early access to new features",
-    ],
-  };
-
-  const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
+  const [creditTransactions, setCreditTransactions] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -92,6 +74,45 @@ function BillingPageContent() {
   const LOW_CREDITS_THRESHOLD = 1000;
   const [paymentData, setPaymentData] = useState<any>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
+  // Holiday promotions
+  const HOLIDAY_PROMOTIONS = [
+    {
+      title: "Holiday Special",
+      description: "Get 50% extra credits this holiday season! ",
+      price: 10,
+      baseCredits: 5000,
+      bonusCredits: 2500,
+      isHolidayOffer: true,
+    },
+    {
+      title: "New Year Bundle",
+      description: "Start 2024 with double credits! ",
+      price: 20,
+      baseCredits: 10000,
+      bonusCredits: 10000,
+      isHolidayOffer: true,
+    },
+  ];
+
+  // Regular packages
+  const REGULAR_PACKAGES = [
+    {
+      title: "Starter Pack",
+      description: "Perfect for small projects",
+      price: 10,
+      baseCredits: 5000,
+    },
+    {
+      title: "Pro Pack",
+      description: "Most popular choice for professionals",
+      price: 20,
+      baseCredits: 10000,
+      isSpecialOffer: true,
+    },
+  ];
+
+  const isHolidayPromoActive = true;
 
   useEffect(() => {
     const initializePage = async () => {
@@ -102,7 +123,6 @@ function BillingPageContent() {
             dispatch({ type: "SET_USER", payload: data.user });
             await fetchBillingData(data.user.id);
           } else {
-            // Handle case where user data couldn't be fetched
             setError("Unable to fetch user data. Please try logging in again.");
             return;
           }
@@ -128,27 +148,16 @@ function BillingPageContent() {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch subscription data
-      const { data: subscriptionData, error: subscriptionError } =
+      // Fetch credit transactions
+      const { data: transactionsData, error: transactionsError } =
         await supabase
-          .from("subscriptions")
+          .from("credit_transactions")
           .select("*")
           .eq("user_id", userId)
-          .maybeSingle();
+          .order("created_at", { ascending: false });
 
-      if (subscriptionError && subscriptionError.code !== "PGRST116") {
-        throw subscriptionError;
-      }
-      dispatch({ type: "SET_SUBSCRIPTION", payload: subscriptionData || null });
-
-      // Fetch invoices
-      const { data: invoicesData, error: invoicesError } = await supabase
-        .from("invoices")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      if (invoicesError) throw invoicesError;
-      dispatch({ type: "SET_INVOICES", payload: invoicesData || [] });
+      if (transactionsError) throw transactionsError;
+      setCreditTransactions(transactionsData || []);
 
       // Get word credits using our existing function
       const remainingCredits = await checkWordCredits(userId);
@@ -221,7 +230,7 @@ function BillingPageContent() {
             ? parseInt(creditAmountStr, 10)
             : 0;
           const amountPaid = creditAmount * 0.002;
-          sendEventToMixpanel("topup", { amount: amountPaid }, user);
+          sendEventToMixpanel("topup", user, { amount: amountPaid });
         }
       }
 
@@ -246,14 +255,6 @@ function BillingPageContent() {
       style: "currency",
       currency: "USD",
     });
-  };
-
-  const handleSubscribe = () => {
-    setIsSubscribeModalOpen(true);
-  };
-
-  const handleConfirmSubscription = () => {
-    setIsSubscribeModalOpen(false);
   };
 
   const getProgressValue = () => (wordCredits / MAX_CREDITS) * 100;
@@ -401,9 +402,7 @@ function BillingPageContent() {
                 </CardContent>
                 <CardFooter className='flex justify-between'>
                   {!subscription ? (
-                    <Button onClick={handleSubscribe} className='w-full'>
-                      Subscribe Now
-                    </Button>
+                    <Button className='w-full'>Subscribe Now</Button>
                   ) : (
                     <>
                       <Button variant='outline'>Change Plan</Button>
@@ -547,14 +546,83 @@ function BillingPageContent() {
               </CardContent>
             </Card>
 
-            <SubscribeModal
-              isOpen={isSubscribeModalOpen}
-              onClose={() => setIsSubscribeModalOpen(false)}
-              onSubscribe={handleConfirmSubscription}
-              plan={premiumPlan}
-              initialIsAnnual={isAnnual}
-              annualDiscount={annualDiscount}
-            />
+            {/* Credit Transactions Section */}
+            <Card className='mt-8'>
+              <CardHeader>
+                <CardTitle>Credit Transactions</CardTitle>
+                <CardDescription>
+                  View your credit transaction history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {creditTransactions.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Bonus</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {creditTransactions.map((transaction: any) => (
+                        <TableRow key={transaction.id}>
+                          <TableCell>
+                            {new Date(
+                              transaction.created_at
+                            ).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant='secondary'>
+                              {transaction.transaction_type.replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {transaction.amount.toLocaleString()} credits
+                          </TableCell>
+                          <TableCell>
+                            {transaction.bonus_amount > 0
+                              ? `${transaction.bonus_amount.toLocaleString()} credits`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className='text-center text-gray-500 mb-10'>
+                    No credit transactions yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Holiday Promotions */}
+            {isHolidayPromoActive && (
+              <div className='space-y-4 mt-8'>
+                <div className='flex items-center gap-2'>
+                  <h2 className='text-2xl font-bold'>Holiday Specials</h2>
+                  <Badge variant='destructive'>Limited Time</Badge>
+                </div>
+                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                  {HOLIDAY_PROMOTIONS.map((promo, index) => (
+                    <PromotionCard key={index} {...promo} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Regular Packages */}
+            <div className='space-y-4 mt-8'>
+              <h2 className='text-2xl font-bold'>Credit Packages</h2>
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                {REGULAR_PACKAGES.map((pack, index) => (
+                  <PromotionCard key={index} {...pack} />
+                ))}
+              </div>
+            </div>
+
             <CancelSubscriptionModal
               isOpen={isCancelModalOpen}
               onClose={() => setIsCancelModalOpen(false)}
