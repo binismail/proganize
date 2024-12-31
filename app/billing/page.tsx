@@ -65,22 +65,7 @@ function BillingPageContent() {
   const [isAnnual] = useState(false);
   const annualDiscount = 0.2; // 20% discount for annual billing
 
-  const premiumPlan = {
-    name: "Pro",
-    monthlyPrice: 14.99,
-    features: [
-      "Share documents publicly with a direct link",
-      "Unlimited collaborators",
-      "Unlimited conversations with your documents",
-      "Download documents in PDF and DOCX formats",
-      "Generate add-ons (user stories, technical requirements, product roadmaps)",
-      "Upload documents for AI-powered enhancement",
-      "Priority support",
-      "Early access to new features",
-    ],
-  };
-
-  const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
+  const [creditTransactions, setCreditTransactions] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -121,8 +106,8 @@ function BillingPageContent() {
     {
       title: "Pro Pack",
       description: "Most popular choice for professionals",
-      price: 25,
-      baseCredits: 15000,
+      price: 20,
+      baseCredits: 10000,
       isSpecialOffer: true,
     },
   ];
@@ -138,7 +123,6 @@ function BillingPageContent() {
             dispatch({ type: "SET_USER", payload: data.user });
             await fetchBillingData(data.user.id);
           } else {
-            // Handle case where user data couldn't be fetched
             setError("Unable to fetch user data. Please try logging in again.");
             return;
           }
@@ -164,27 +148,16 @@ function BillingPageContent() {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch subscription data
-      const { data: subscriptionData, error: subscriptionError } =
+      // Fetch credit transactions
+      const { data: transactionsData, error: transactionsError } =
         await supabase
-          .from("subscriptions")
+          .from("credit_transactions")
           .select("*")
           .eq("user_id", userId)
-          .maybeSingle();
+          .order("created_at", { ascending: false });
 
-      if (subscriptionError && subscriptionError.code !== "PGRST116") {
-        throw subscriptionError;
-      }
-      dispatch({ type: "SET_SUBSCRIPTION", payload: subscriptionData || null });
-
-      // Fetch invoices
-      const { data: invoicesData, error: invoicesError } = await supabase
-        .from("invoices")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      if (invoicesError) throw invoicesError;
-      dispatch({ type: "SET_INVOICES", payload: invoicesData || [] });
+      if (transactionsError) throw transactionsError;
+      setCreditTransactions(transactionsData || []);
 
       // Get word credits using our existing function
       const remainingCredits = await checkWordCredits(userId);
@@ -282,14 +255,6 @@ function BillingPageContent() {
       style: "currency",
       currency: "USD",
     });
-  };
-
-  const handleSubscribe = () => {
-    setIsSubscribeModalOpen(true);
-  };
-
-  const handleConfirmSubscription = () => {
-    setIsSubscribeModalOpen(false);
   };
 
   const getProgressValue = () => (wordCredits / MAX_CREDITS) * 100;
@@ -437,9 +402,7 @@ function BillingPageContent() {
                 </CardContent>
                 <CardFooter className='flex justify-between'>
                   {!subscription ? (
-                    <Button onClick={handleSubscribe} className='w-full'>
-                      Subscribe Now
-                    </Button>
+                    <Button className='w-full'>Subscribe Now</Button>
                   ) : (
                     <>
                       <Button variant='outline'>Change Plan</Button>
@@ -583,6 +546,58 @@ function BillingPageContent() {
               </CardContent>
             </Card>
 
+            {/* Credit Transactions Section */}
+            <Card className='mt-8'>
+              <CardHeader>
+                <CardTitle>Credit Transactions</CardTitle>
+                <CardDescription>
+                  View your credit transaction history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {creditTransactions.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Bonus</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {creditTransactions.map((transaction: any) => (
+                        <TableRow key={transaction.id}>
+                          <TableCell>
+                            {new Date(
+                              transaction.created_at
+                            ).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant='secondary'>
+                              {transaction.transaction_type.replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {transaction.amount.toLocaleString()} credits
+                          </TableCell>
+                          <TableCell>
+                            {transaction.bonus_amount > 0
+                              ? `${transaction.bonus_amount.toLocaleString()} credits`
+                              : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className='text-center text-gray-500 mb-10'>
+                    No credit transactions yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Holiday Promotions */}
             {isHolidayPromoActive && (
               <div className='space-y-4 mt-8'>
@@ -608,14 +623,6 @@ function BillingPageContent() {
               </div>
             </div>
 
-            <SubscribeModal
-              isOpen={isSubscribeModalOpen}
-              onClose={() => setIsSubscribeModalOpen(false)}
-              onSubscribe={handleConfirmSubscription}
-              plan={premiumPlan}
-              initialIsAnnual={isAnnual}
-              annualDiscount={annualDiscount}
-            />
             <CancelSubscriptionModal
               isOpen={isCancelModalOpen}
               onClose={() => setIsCancelModalOpen(false)}

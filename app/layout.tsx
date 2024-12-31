@@ -6,6 +6,7 @@ import { AppProvider } from "./context/appContext";
 import { Toaster } from "@/components/ui/toaster";
 import Script from "next/script";
 import SupabaseProvider from './supabase-provider'
+import { GlobalTopUpModal } from "@/components/shared/GlobalTopUpModal";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -49,8 +50,9 @@ export default function RootLayout({
         >
           <SupabaseProvider>
             <AppProvider>
-              <Toaster />
               {children}
+              <GlobalTopUpModal />
+              <Toaster />
             </AppProvider>
           </SupabaseProvider>
         </ThemeProvider>

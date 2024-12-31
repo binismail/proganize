@@ -40,35 +40,35 @@ export default function LoginPage() {
               className='rounded-lg'
             />
           </div>
-          <h2 className='text-4xl md:text-5xl font-extrabold leading-tight'>
-            Organize Your Content
+          <h2 className='text-4xl md:text-5xl font-extrabold leading-normal'>
+            Write, Organize and Chat with
             <br />
-            With AI Power
+            Documents With AI Power
           </h2>
           <p className='text-lg text-gray-100 max-w-md'>
-            Transform your documents and ideas into well-structured, organized
-            content with our AI-powered tools.
+            Easily write documents 10X faster, chat with pdf, create study
+            guides, flashcards and get 10x ahead of deadlines
           </p>
 
           {/* Feature List */}
           <div className='space-y-4 mt-8'>
             <div className='flex items-center gap-3'>
               <div className='p-2 bg-white/10 rounded-lg'>
-                <FileText className='w-5 h-5' />
+                <MessageSquare className='w-5 h-5' />
               </div>
-              <span>Smart Document Organization</span>
+              <span>Chat with pdf</span>
             </div>
             <div className='flex items-center gap-3'>
               <div className='p-2 bg-white/10 rounded-lg'>
                 <PenTool className='w-5 h-5' />
               </div>
-              <span>AI-Powered Content Generation</span>
+              <span>Create Study Guides</span>
             </div>
             <div className='flex items-center gap-3'>
               <div className='p-2 bg-white/10 rounded-lg'>
-                <MessageSquare className='w-5 h-5' />
+                <FileText className='w-5 h-5' />
               </div>
-              <span>Interactive Chat Experience</span>
+              <span>Write documents 10X faster</span>
             </div>
           </div>
         </div>

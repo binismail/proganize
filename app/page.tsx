@@ -3,10 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAppContext } from "./context/appContext";
 import { supabase } from "@/utils/supabase/instance";
-import {
-  checkAndInitializeUser,
-  checkSubscriptionStatus,
-} from "@/utils/supabaseOperations";
+import { checkSubscriptionStatus } from "@/utils/supabaseOperations";
 import {
   FileText,
   PenTool,
@@ -29,10 +26,11 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useCarouselAutoplay } from "@/hooks/useCarouselAutoplay";
-import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import { CreditDisplay } from "@/components/shared/creditDisplay";
+import { useToast } from "@/hooks/use-toast";
+import { WelcomePopup } from "@/components/shared/WelcomePopup";
 
 export default function Dashboard() {
   const { dispatch, state } = useAppContext();
@@ -44,7 +42,9 @@ export default function Dashboard() {
     pdfConversationsCount: 0,
   });
   const [recentItems, setRecentItems] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+  const [userName, setUserName] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
     dispatch({ type: "SET_IS_LOADING", payload: true });
@@ -100,6 +100,108 @@ export default function Dashboard() {
 
     fetchUserAndSubscription();
   }, [dispatch]);
+
+  useEffect(() => {
+    const handleNewSignIn = async () => {
+      if (!state.user) return;
+
+      try {
+        // Check if user has word credits
+        const { data: existingCredits, error: creditsError } = await supabase
+          .from("word_credits")
+          .select("*")
+          .eq("user_id", state.user.id)
+          .maybeSingle();
+
+        console.log("Existing credits check:", {
+          existingCredits,
+          creditsError,
+        });
+
+        let isNewUser = false;
+
+        if (
+          !existingCredits &&
+          (!creditsError || creditsError.code === "PGRST116")
+        ) {
+          isNewUser = true;
+
+          // Initialize word credits using upsert to prevent race conditions
+          const { data: newCredits, error: initError } = await supabase
+            .from("word_credits")
+            .insert([
+              {
+                user_id: state.user.id,
+                remaining_credits: 1000,
+                total_words_generated: 0,
+              },
+            ])
+            .select()
+            .single();
+
+          if (initError) {
+            console.error("Detailed Error initializing credits:", {
+              error: initError,
+              code: initError.code,
+              details: initError.details,
+              message: initError.message,
+            });
+            throw initError;
+          }
+
+          // Log credit transaction
+          const { data: transactionData, error: transactionError } =
+            await supabase
+              .from("credit_transactions")
+              .insert([
+                {
+                  user_id: state.user.id,
+                  amount: 1000,
+                  bonus_amount: 0,
+                  transaction_type: "holiday_promotion",
+                },
+              ])
+              .select();
+
+          if (transactionError) {
+            console.error("Detailed Error creating transaction:", {
+              error: transactionError,
+              code: transactionError.code,
+              details: transactionError.details,
+              message: transactionError.message,
+            });
+            // Don't throw here, as the credits are already created
+          }
+        }
+
+        if (isNewUser) {
+          const displayName =
+            state.user.user_metadata?.full_name ||
+            state.user.email?.split("@")[0];
+          setUserName(displayName);
+          setShowWelcomePopup(true);
+
+          // Update app context with initial credits
+          dispatch({
+            type: "SET_WORD_CREDITS",
+            payload: {
+              remaining_credits: 1000,
+              total_words_generated: 0,
+            },
+          });
+        }
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Error during setup",
+          description:
+            "There was a problem setting up your account. Please try again.",
+        });
+      }
+    };
+
+    handleNewSignIn();
+  }, [state.user]);
 
   const fetchDocuments = async (userId: string) => {
     try {
@@ -330,107 +432,115 @@ export default function Dashboard() {
     },
   ];
 
-  const handlePurchaseCredits = () => {
-    // Implement Stripe payment
-    router.push("/billing");
-  };
-
   return (
-    <div className='flex h-screen overflow-hidden'>
-      <Nav />
-      <div className='flex-1 overflow-y-auto'>
-        <main className='container mx-auto p-6 space-y-8'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <h1 className='text-3xl font-bold'>
-                Welcome
-                {state.user
-                  ? `, ${state.user.user_metadata.full_name?.toLowerCase()}`
-                  : ""}
-              </h1>
-              <p className='text-muted-foreground mt-2'>
-                Here's an overview of your workspace
-              </p>
-            </div>
-            {state.user && (
-              <div className='flex items-center gap-4'>
-                <div className='bg-muted rounded-lg px-4 py-2'>
-                  <CreditDisplay variant='minimal' />
-                </div>
-                <Button onClick={() => router.push("/settings")}>
-                  <CreditCard className='h-4 w-4 mr-2' />
-                  Top Up
-                </Button>
+    <>
+      <div className='flex h-screen overflow-hidden'>
+        <Nav />
+        <div className='flex-1 overflow-y-auto'>
+          <main className='container mx-auto p-6 space-y-8'>
+            <div className='flex items-center justify-between'>
+              <div>
+                <h1 className='text-3xl font-bold'>
+                  Welcome
+                  {state.user
+                    ? `, ${state.user.user_metadata.full_name?.toLowerCase()}`
+                    : ""}
+                </h1>
+                <p className='text-muted-foreground mt-2'>
+                  Here's an overview of your workspace
+                </p>
               </div>
-            )}
-          </div>
-
-          <div>
-            <h2 className='text-2xl font-bold mb-4'>Get Started With</h2>
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-              {state.isLoading
-                ? // Loading skeletons for features
-                  Array(6)
-                    .fill(0)
-                    .map((_, i) => (
-                      <div
-                        key={i}
-                        className='rounded-lg border bg-card text-card-foreground shadow-sm'
-                      >
-                        <div className='p-6 space-y-2'>
-                          <Skeleton className='h-8 w-8 rounded' />
-                          <Skeleton className='h-5 w-32' />
-                          <Skeleton className='h-4 w-full' />
-                        </div>
-                      </div>
-                    ))
-                : features.map((feature) => (
-                    <button
-                      key={feature.title}
-                      className='w-full'
-                      onClick={feature.action}
-                    >
-                      <div className='rounded-lg border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-lg'>
-                        <div className='p-6 space-y-2'>
-                          <feature.icon
-                            className={`w-8 h-8 ${feature.color}`}
-                          />
-                          <h3 className='font-semibold'>{feature.title}</h3>
-                          <p className='text-sm text-muted-foreground'>
-                            {feature.description}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-            </div>
-          </div>
-
-          <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
-            <RecentItems
-              items={recentItems}
-              title='Recent Activity'
-              description='Your latest documents and conversations'
-            />
-            <div className='space-y-8'>
-              {/* Holiday Promotions */}
-              <div className='space-y-4'>
-                <div className='flex items-center justify-between'>
-                  <div className='flex items-center gap-2'>
-                    <h2 className='text-2xl font-bold'>Holiday Specials</h2>
-                    <Badge variant='destructive' className='animate-pulse'>
-                      Limited Time
-                    </Badge>
+              {state.user && (
+                <div className='flex items-center gap-4'>
+                  <div className='bg-muted rounded-lg px-4 py-2'>
+                    <CreditDisplay variant='minimal' />
                   </div>
+                  <Button
+                    onClick={() =>
+                      dispatch({ type: "SET_SHOW_TOPUP_MODAL", payload: true })
+                    }
+                  >
+                    <CreditCard className='h-4 w-4 mr-2' />
+                    Top Up
+                  </Button>
                 </div>
+              )}
+            </div>
 
-                <CarouselWrapper items={HOLIDAY_PROMOTIONS} />
+            <div>
+              <h2 className='text-2xl font-bold mb-4'>Get Started With</h2>
+              <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+                {state.isLoading
+                  ? // Loading skeletons for features
+                    Array(6)
+                      .fill(0)
+                      .map((_, i) => (
+                        <div
+                          key={i}
+                          className='rounded-lg border bg-card text-card-foreground shadow-sm'
+                        >
+                          <div className='p-6 space-y-2'>
+                            <Skeleton className='h-8 w-8 rounded' />
+                            <Skeleton className='h-5 w-32' />
+                            <Skeleton className='h-4 w-full' />
+                          </div>
+                        </div>
+                      ))
+                  : features.map((feature) => (
+                      <button
+                        key={feature.title}
+                        className='w-full'
+                        onClick={feature.action}
+                      >
+                        <div className='rounded-lg border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-lg'>
+                          <div className='p-6 space-y-2'>
+                            <feature.icon
+                              className={`w-8 h-8 ${feature.color}`}
+                            />
+                            <h3 className='font-semibold'>{feature.title}</h3>
+                            <p className='text-sm text-muted-foreground'>
+                              {feature.description}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
               </div>
             </div>
-          </div>
-        </main>
+
+            <div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
+              <RecentItems
+                items={recentItems}
+                title='Recent Activity'
+                description='Your latest documents and conversations'
+              />
+              <div className='space-y-8'>
+                {/* Holiday Promotions */}
+                <div className='space-y-4'>
+                  <div className='flex items-center justify-between'>
+                    <div className='flex items-center gap-2'>
+                      <h2 className='text-2xl font-bold'>Holiday Specials</h2>
+                      <Badge variant='destructive' className='animate-pulse'>
+                        Limited Time
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <CarouselWrapper items={HOLIDAY_PROMOTIONS} />
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+      {showWelcomePopup && (
+        <WelcomePopup
+          userName={userName}
+          onClose={() => setShowWelcomePopup(false)}
+          isOpen={showWelcomePopup}
+        />
+      )}
+    </>
   );
 }
 
